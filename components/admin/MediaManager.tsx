@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Trash2, Image as ImageIcon, FileText, Code, Upload } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Film, Code, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ContentMediaType } from '@/lib/types';
+import { CldUploadWidget } from 'next-cloudinary';
 
 export type MediaForm = {
-    id?: number;
+    id?: string | number;
     mediaType: ContentMediaType;
     url: string;
     embedHtml: string;
@@ -23,12 +24,13 @@ interface MediaManagerProps {
 
 const MEDIA_OPTIONS: Array<{ label: string; value: ContentMediaType; icon: any }> = [
     { label: 'Gambar', value: 'image', icon: ImageIcon },
-    { label: 'File', value: 'file', icon: FileText },
-    { label: 'Embed', value: 'embed', icon: Code },
+    { label: 'Video', value: 'video', icon: Film },
+    { label: 'YouTube Embed', value: 'youtube_embed', icon: Code },
 ];
 
 const MediaManager: React.FC<MediaManagerProps> = ({ items, onChange, onMessage }) => {
     const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '';
 
     const addItem = () => {
         onChange([
@@ -58,17 +60,22 @@ const MediaManager: React.FC<MediaManagerProps> = ({ items, onChange, onMessage 
         try {
             if (item.mediaType === 'image') {
                 if (!file.type.startsWith('image/')) throw new Error('Harus berupa gambar');
-                const res = await api.upload.media(file, 'mis-al-falah/publikasi/media');
-                updateItem(index, 'url', res.url);
-            } else if (item.mediaType === 'file') {
-                const res = await api.upload.file(file, 'downloads');
-                updateItem(index, 'url', res.url);
             }
+            const res = await api.upload.media(file, 'mis-al-falah/publikasi/media');
+            updateItem(index, 'url', (res as any).url || (res as any).mediaUrl || '');
         } catch (error: any) {
             onMessage?.(error.message || 'Upload gagal');
         } finally {
             setUploadingIndex(null);
         }
+    };
+
+    const handleCloudinary = (index: number, result: any) => {
+        const info = result?.info as any;
+        const url = info?.secure_url || info?.url;
+        if (!url) return;
+        updateItem(index, 'url', url);
+        if (!items[index].caption) updateItem(index, 'caption', info?.original_filename || '');
     };
 
     return (
@@ -134,7 +141,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({ items, onChange, onMessage 
                             </label>
                         </div>
 
-                        {item.mediaType === 'embed' ? (
+                        {item.mediaType === 'youtube_embed' ? (
                             <textarea
                                 value={item.embedHtml}
                                 onChange={(e) => updateItem(index, 'embedHtml', e.target.value)}
@@ -152,21 +159,39 @@ const MediaManager: React.FC<MediaManagerProps> = ({ items, onChange, onMessage 
                                         className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs dark:border-white/10 dark:bg-black/30"
                                         placeholder="URL Media / File"
                                     />
-                                    <label className="flex cursor-pointer items-center justify-center rounded-xl border border-emerald-600 px-3 text-emerald-600 hover:bg-emerald-50 transition">
-                                        <input
-                                            type="file"
-                                            className="hidden"
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) handleUpload(index, file);
-                                            }}
-                                        />
-                                        {uploadingIndex === index ? (
-                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
-                                        ) : (
+                                    {uploadPreset ? (
+                                        <CldUploadWidget
+                                            uploadPreset={uploadPreset}
+                                            options={{ folder: 'mis-al-falah/media' }}
+                                            onSuccess={(res) => handleCloudinary(index, res)}
+                                        >
+                                            {({ open }) => (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => open()}
+                                                    className="flex cursor-pointer items-center justify-center rounded-xl border border-emerald-600 px-3 text-emerald-600 hover:bg-emerald-50 transition"
+                                                >
+                                                    {uploadingIndex === index ? (
+                                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+                                                    ) : (
+                                                        <Upload size={14} />
+                                                    )}
+                                                </button>
+                                            )}
+                                        </CldUploadWidget>
+                                    ) : (
+                                        <label className="flex cursor-pointer items-center justify-center rounded-xl border border-emerald-300 px-3 text-emerald-300">
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) handleUpload(index, file);
+                                                }}
+                                            />
                                             <Upload size={14} />
-                                        )}
-                                    </label>
+                                        </label>
+                                    )}
                                 </div>
                                 {item.mediaType === 'image' && item.url && (
                                     <div className="h-24 w-full overflow-hidden rounded-lg border border-gray-100 dark:border-white/10">

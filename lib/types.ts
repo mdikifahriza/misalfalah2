@@ -1,262 +1,131 @@
-// Types for API responses based on Prisma schema
+export type ContentMediaType = 'image' | 'video' | 'youtube_embed';
 
-export interface SchoolSettings {
-    id: string;
-    name: string;
-    address: string;
-    phone: string;
-    email: string;
-    logoUrl: string | null;
-}
-
-export interface HeroSlide {
-    id: number;
-    imageUrl: string;
-    title: string;
-    subtitle: string;
-    order: number;
-}
-
-export interface Highlight {
-    id: number;
-    icon: string;
-    title: string;
-    description: string;
-    order: number;
-}
-
-export interface Teacher {
-    id: number;
-    name: string;
-    position: string;
-    imageUrl: string | null;
-}
-
-export interface NewsItem {
-    id: number;
-    title: string;
-    slug: string;
-    date: string;
-    excerpt: string;
-    content?: string;
-    thumbnailUrl: string | null;
-    category: string;
-}
-
-export type ContentType = 'news' | 'announcement' | 'article' | 'gallery' | 'download';
-
-export interface PinnedItem {
-    id: number;
-    title: string;
-    slug: string;
-    coverUrl: string | null;
-    type: 'publikasi' | 'prestasi';
-    date: string;
-}
-export type ContentMediaType = 'image' | 'file' | 'embed';
-
-export interface ContentMedia {
-    id: number;
-    postId: number;
+export interface MediaItem {
+    id?: string;
+    entityType?: 'news' | 'publication' | 'achievement' | 'gallery' | 'download' | 'academic' | 'ppdb';
+    entityId?: string;
     mediaType: ContentMediaType;
-    url: string | null;
-    embedHtml: string | null;
-    caption: string | null;
+    mediaUrl: string;
+    url?: string; // Alias for backward compatibility
+    thumbnailUrl?: string | null;
+    caption?: string | null;
+    isMain?: boolean;
     displayOrder: number;
-    isActive: boolean;
+    createdAt?: string;
 }
 
-export interface ContentPost {
-    id: number;
-    type: ContentType;
+export interface NewsPost {
+    id: string;
     title: string;
     slug: string;
     excerpt?: string | null;
-    contentHtml?: string | null;
-    contentText?: string | null;
-    coverUrl?: string | null;
-    category?: string | null;
-    publishedAt?: string | null;
+    content?: string | null;
+    authorName: string;
+    publishedAt: string;
     isPublished: boolean;
     isPinned: boolean;
-    meta?: unknown | null;
-    createdAt?: string | null;
-    updatedAt?: string | null;
-    media?: ContentMedia[];
+    viewCount: number;
+    createdAt: string;
+    updatedAt: string;
+    media?: MediaItem[];
+    coverUrl?: string | null;
 }
 
-export interface ContentPostDetailResponse {
-    post: ContentPost;
-    media: ContentMedia[];
-}
+export type PublicationType = 'announcement' | 'article' | 'bulletin' | 'publication';
 
-export interface NewsListResponse {
-    items: NewsItem[];
-    total: number;
-    page: number;
-    pageSize: number;
-    categories: string[];
-    categoryCounts: { category: string; count: number }[];
-}
-
-export interface ContentListResponse {
-    items: ContentPost[];
-    total: number;
-    page: number;
-    pageSize: number;
-    categories: string[];
-    categoryCounts: { category: string; count: number }[];
-}
-
-export interface Activity {
-    id: number;
+export interface Publication {
+    id: string;
     title: string;
-    imageUrl: string | null;
-}
-
-export interface GraduationStudent {
-    id: number;
-    nisn: string;
-    name: string;
-    className: string;
-    status: 'LULUS' | 'DITUNDA';
-    averageScore: number;
-    year: string;
+    slug: string;
+    type: PublicationType;
+    excerpt?: string | null;
+    description?: string | null; // Alias for excerpt
+    content?: string | null;
+    authorName: string;
+    publishedAt: string;
+    isPublished: boolean;
+    isPinned: boolean;
+    createdAt: string;
+    updatedAt: string;
+    media?: MediaItem[];
+    coverUrl?: string | null;
 }
 
 export interface Achievement {
-    id: number;
+    content: string | TrustedHTML;
+    id: string;
     title: string;
     slug: string;
-    excerpt?: string | null;
-    contentHtml?: string | null;
-    contentText?: string | null;
-    coverUrl?: string | null;
-    category?: string | null;
-    achievedAt?: string | null;
+    eventName: string | null;
+    eventLevel: AchievementLevel;
+    rank: string | null;
+    description: string | null;
+    achievedAt: string;
     isPublished: boolean;
     isPinned: boolean;
-    meta?: unknown | null;
-    createdAt?: string | null;
-    updatedAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    media?: MediaItem[];
+    coverUrl?: string | null;
+}
+
+export type AchievementLevel = 'sekolah' | 'kecamatan' | 'kabupaten' | 'provinsi' | 'nasional' | 'internasional';
+
+export interface Gallery {
+    id: string;
+    title: string;
+    slug: string;
+    description: string | null;
+    eventDate: string | null;
+    publishedAt: string;
+    isPublished: boolean;
+    isPinned: boolean;
+    createdAt: string;
+    updatedAt: string;
+    media?: MediaItem[];
+    coverUrl?: string | null;
+}
+
+export interface Download {
+    id: string;
+    title: string;
+    slug: string;
+    description: string | null;
+    fileUrl?: string | null; // legacy single file
+    fileSizeKb?: number | null; // legacy single file
+    fileType?: string | null; // legacy single file
+    files?: DownloadFile[]; // new multi-file attachments stored in Supabase
+    downloadCount: number;
+    isPublished: boolean;
+    isPinned?: boolean;
+    createdAt: string;
+    updatedAt: string;
+    coverUrl?: string | null;
+    media?: MediaItem[];
 }
 
 export interface DownloadFile {
-    id: number;
+    id: string;
+    downloadId: string;
+    fileName: string;
+    fileType: string | null;
+    fileSizeKb: number | null;
+    storagePath: string;
+    publicUrl: string;
+    displayOrder: number;
+    createdAt?: string;
+}
+
+export type ContentPost = NewsPost | Publication | Achievement | Gallery;
+export type ContentType = 'news' | 'publication' | 'achievement' | 'gallery' | 'download';
+
+export interface PinnedItem {
+    id: string;
     title: string;
-    category: string;
+    slug: string;
+    coverUrl: string | null;
+    type: string;
     date: string;
-    size: string;
-    fileType: string;
-    fileUrl: string;
-}
-
-export interface PPDBFormData {
-    namaLengkap: string;
-    nik: string;
-    nisn: string;
-    tempatLahir: string;
-    tanggalLahir: string;
-    jenisKelamin: 'L' | 'P';
-    alamat: string;
-    namaAyah: string;
-    pekerjaanAyah: string;
-    namaIbu: string;
-    pekerjaanIbu: string;
-    noHp: string;
-}
-
-export interface PPDBRegistration {
-    id: string;
-    namaLengkap: string;
-    nik: string;
-    nisn: string | null;
-    tempatLahir: string;
-    tanggalLahir: string;
-    jenisKelamin: 'L' | 'P';
-    alamat: string;
-    namaAyah: string;
-    pekerjaanAyah: string;
-    namaIbu: string;
-    pekerjaanIbu: string;
-    noHp: string;
-    status: 'VERIFIKASI' | 'BERKAS_VALID' | 'DITERIMA' | 'DITOLAK';
-    pesan: string | null;
-}
-
-export interface PPDBStatusResponse {
-    id: string;
-    nama: string;
-    tanggalDaftar: string;
-    status: 'VERIFIKASI' | 'BERKAS_VALID' | 'DITERIMA' | 'DITOLAK';
-    pesan: string | null;
-}
-
-export interface PPDBSubmitResponse {
-    success: boolean;
-    registrationId: string;
-}
-
-export interface ProfilePage {
-    id: string;
-    descriptionJson?: unknown | null;
-    descriptionHtml?: string | null;
-    descriptionText?: string | null;
-    videoUrl?: string | null;
-    schoolName: string;
-    npsn: string;
-    schoolAddress: string;
-    village: string;
-    district: string;
-    city: string;
-    province: string;
-    schoolStatus: string;
-    educationForm: string;
-    educationLevel: string;
-}
-
-export interface AcademicSubject {
-    id: number;
-    name: string;
-    order: number;
-}
-
-export interface AcademicProgram {
-    id: number;
-    title: string;
-    description: string;
-    icon: string | null;
-    order: number;
-}
-
-export interface AcademicPage {
-    id: string;
-    heroTitle: string;
-    heroSubtitle: string;
-    heroImageUrl: string | null;
-    curriculumTitle: string;
-    curriculumIntro1: string;
-    curriculumIntro2: string;
-    subjectsTitle: string;
-    programsTitle: string;
-    subjects: AcademicSubject[];
-    programs: AcademicProgram[];
-}
-
-export interface ContactWhatsappItem {
-    id: string;
-    name: string;
-    url: string;
-}
-
-export interface ContactPage {
-    id: string;
-    address: string;
-    phone?: string | null;
-    email: string;
-    whatsappList: ContactWhatsappItem[];
-    adminWhatsappId?: string | null;
-    mapEmbedHtml: string | null;
 }
 
 export interface SiteSettings {
@@ -303,59 +172,61 @@ export interface FooterQuickLink {
     isActive: boolean;
 }
 
+export interface ProfilePage {
+    id: string;
+    schoolName: string;
+    npsn: string;
+    schoolAddress: string;
+    village?: string;
+    district?: string;
+    city?: string;
+    province?: string;
+    schoolStatus?: string;
+    educationForm?: string;
+    educationLevel?: string;
+    descriptionHtml?: string | null;
+    descriptionText?: string | null;
+    descriptionJson?: any;
+    videoUrl?: string | null;
+}
+
+export interface AdminPublicUser {
+    id: string;
+    username: string;
+    role: 'admin' | 'superadmin';
+    fullName: string;
+    email: string | null;
+    phone: string | null;
+}
+
 export interface HeadmasterGreeting {
     id: string;
     title: string;
     subtitle: string | null;
-    contentJson: unknown | null;
     contentHtml: string | null;
     contentText: string | null;
+    contentJson?: any;
     headmasterName: string;
     headmasterTitle: string | null;
     photoUrl: string | null;
-    isActive: boolean;
+    isActive?: boolean;
+    updatedAt?: string;
 }
 
-export interface HistoryPage {
+export interface Activity {
     id: string;
     title: string;
-    subtitle: string | null;
-    contentJson: unknown | null;
-    contentHtml: string | null;
-    contentText: string | null;
-    coverImageUrl: string | null;
-    videoUrl: string | null;
-    isActive: boolean;
-}
-
-export interface HistoryTimelineItem {
-    id: string;
-    historyPageId: string;
-    year: string;
-    title: string;
-    descriptionJson: unknown | null;
-    descriptionHtml: string | null;
-    descriptionText: string | null;
-    mediaUrl: string | null;
-    displayOrder: number;
-    isActive: boolean;
-}
-
-export interface VisionMissionPage {
-    id: string;
-    visionText: string;
-    missionText: string;
-    isActive: boolean;
+    imageUrl: string | null;
+    date: string;
 }
 
 export interface Extracurricular {
     id: string;
     name: string;
-    description: string;
-    icon?: string | null;
-    imageUrl?: string | null;
-    schedule?: string | null;
+    description: string | null;
+    icon: string | null;
     coachName?: string | null;
+    schedule?: string | null;
     displayOrder: number;
     isActive: boolean;
 }
@@ -363,55 +234,218 @@ export interface Extracurricular {
 export interface CharacterProgram {
     id: string;
     name: string;
-    description: string;
-    icon?: string | null;
+    description: string | null;
+    icon: string | null;
     frequency?: string | null;
     displayOrder: number;
     isActive: boolean;
 }
 
-export type SiteBannerPlacement = 'home' | 'all' | 'custom';
+export interface AcademicSubject {
+    id: string;
+    name: string;
+    icon: string | null;
+    order: number;
+    description?: string | null;
+}
 
-export interface SiteBanner {
+export interface AcademicProgram {
     id: string;
     title: string;
-    description?: string | null;
-    buttonText: string;
-    buttonLink: string;
-    backgroundColor?: string | null;
-    textColor?: string | null;
-    placement: SiteBannerPlacement;
+    description: string | null;
+    icon: string | null;
+    order: number;
+}
+
+export interface AcademicPage {
+    id: string;
+    title: string;
+    subtitle?: string | null;
+    content?: string | null;
+    isActive?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+    sections?: AcademicSection[];
+    media?: MediaItem[];
+    coverUrl?: string | null;
+}
+
+export interface AcademicSection {
+    id: string;
+    pageId: string;
+    title: string;
+    body?: string | null;
     displayOrder: number;
-    isActive: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface GraduationStudent {
+    id: string;
+    registrationNumber: string;
+    fullName: string;
+    name?: string; // for compatibility
+    nisn?: string;
+    className?: string;
+    status: 'LULUS' | 'TIDAK_LULUS' | 'PENDING';
+    schoolName: string;
+    averageScore?: number;
 }
 
 export interface PageHero {
     id: string;
-    pageSlug: string;
     title: string;
-    subtitle?: string | null;
-    imageUrl: string;
-    overlayOpacity?: number | null;
-    isActive: boolean;
+    subtitle: string | null;
+    imageUrl: string | null;
 }
 
-export type AdminRole = 'admin' | 'superadmin';
-
-export interface AdminPublicUser {
+export interface PPDBStatusResponse {
     id: string;
-    username: string;
-    role: AdminRole;
-    fullName: string;
+    nama: string;
+    tanggalDaftar: string;
+    status: string;
+    pesan: string | null;
+}
+
+export interface PPDBFormData {
+    namaLengkap: string;
+    nik: string;
+    nisn: string;
+    tempatLahir: string;
+    tanggalLahir: string;
+    jenisKelamin: 'L' | 'P';
+    alamat: string;
+    namaAyah: string;
+    pekerjaanAyah: string;
+    namaIbu: string;
+    pekerjaanIbu: string;
+    noHp: string;
+    files?: Array<{ fileType: string; fileUrl: string }>;
+}
+
+export interface PPDBSubmitResponse {
+    success: boolean;
+    registration?: PPDBRegistration;
+    registrationId?: string;
+    nisn?: string;
+    message: string;
+}
+
+export interface ContactWhatsappItem {
+    id: string;
+    label: string;
+    name?: string; // Compatibility
+    number: string;
+    isActive: boolean;
+    url?: string;
+}
+
+export interface ContactPage {
+    id: string;
+    title: string | null;
+    description: string | null;
+    address: string | null;
     email: string | null;
     phone: string | null;
+    whatsappItems?: ContactWhatsappItem[];
+    whatsappList?: ContactWhatsappItem[]; // Compatibility
+    adminWhatsappId?: string | null; // Compatibility
+    mapEmbedHtml?: string | null;
+}
+
+export interface SiteBanner {
+    id: string;
+    title: string;
+    imageUrl: string;
+    linkUrl?: string | null;
+}
+
+export interface PPDBRegistration {
+    id: string;
+    namaLengkap: string;
+    nik: string;
+    nisn: string | null;
+    tempatLahir: string;
+    tanggalLahir: string;
+    jenisKelamin: 'L' | 'P';
+    alamat: string;
+    namaAyah: string;
+    pekerjaanAyah?: string | null;
+    namaIbu: string;
+    pekerjaanIbu?: string | null;
+    noHp: string;
+    status: string;
+    pesan?: string | null;
+    tanggalDaftar?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    files?: PPDBFile[];
+}
+
+export interface PPDBFile {
+    id: string;
+    registrationId: string;
+    fileType: 'kk' | 'akta_kelahiran' | 'ktp_wali' | 'pas_foto' | 'nisn' | 'ijazah_rapor';
+    fileUrl: string;
+    createdAt?: string;
+}
+
+export interface PPDBListItem {
+    id: string;
+    namaLengkap: string;
+    status: string;
+    nisn: string | null;
+}
+
+export interface PushSubscriptionPayload {
+    registrationId: string;
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    userAgent?: string | null;
+}
+
+export interface PPDBWave {
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    quota?: number | null;
+    isActive: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface PPDBNotification {
+    id: string;
+    registrationId?: string | null;
+    waveId?: string | null;
+    title: string;
+    message: string;
+    createdAt?: string;
+}
+
+export interface Teacher {
+    id: number;
+    name: string;
+    position: string;
+    imageUrl?: string | null;
+    isActive?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 export interface AdminLoginResponse {
     user: AdminPublicUser;
 }
 
-// Navigation (static, not from DB)
-export interface NavItem {
-    label: string;
-    path: string;
+export interface HeroItem {
+    id: string;
+    type: 'news' | 'publication' | 'achievement' | 'gallery' | 'download';
+    title: string;
+    slug: string;
+    description?: string | null;
+    date: string;
+    coverUrl?: string | null;
+    isPinned?: boolean;
 }

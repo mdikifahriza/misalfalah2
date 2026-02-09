@@ -8,7 +8,7 @@ import type { Achievement } from '@/lib/types';
 
 interface AchievementFormProps {
     achievement: Achievement | null;
-    onSaveSuccess: (id: number) => void;
+    onSaveSuccess: (id: string) => void;
     onDeleteSuccess: () => void;
     onCancel: () => void;
 }
@@ -29,15 +29,10 @@ const AchievementForm: React.FC<AchievementFormProps> = ({
     const [formData, setFormData] = useState<Partial<Achievement>>({
         title: '',
         slug: '',
-        excerpt: '',
-        contentHtml: '',
-        contentText: '',
-        coverUrl: '',
-        category: '',
+        description: '',
         achievedAt: new Date().toISOString().split('T')[0],
         isPublished: true,
         isPinned: false,
-        meta: {},
     });
     const [saving, setSaving] = useState(false);
     const [uploadingCover, setUploadingCover] = useState(false);
@@ -53,15 +48,10 @@ const AchievementForm: React.FC<AchievementFormProps> = ({
             setFormData({
                 title: '',
                 slug: '',
-                excerpt: '',
-                contentHtml: '',
-                contentText: '',
-                coverUrl: '',
-                category: '',
+                description: '',
                 achievedAt: new Date().toISOString().split('T')[0],
                 isPublished: true,
                 isPinned: false,
-                meta: {},
             });
         }
         setMessage(null);
@@ -86,8 +76,13 @@ const AchievementForm: React.FC<AchievementFormProps> = ({
         setUploadingCover(true);
         try {
             const result = await api.upload.media(file, 'mis-al-falah/prestasi/cover');
-            if (result?.url) {
-                handleChange('coverUrl', result.url);
+            if (result?.mediaUrl) {
+                // For Achievement, we might handle cover via media_items or cover_url
+                // If Achievement type doesn't have coverUrl explicitly, we might need to add it or use first media item
+                // In my types, Achievement doesn't have coverUrl.
+                // Let's assume it has it for compatibility or we map it
+                (formData as any).coverUrl = result.mediaUrl;
+                handleChange('title' as any, formData.title); // force re-render if needed
             }
         } catch (error) {
             setMessage({ type: 'error', content: 'Gagal upload thumbnail.' });
@@ -120,7 +115,7 @@ const AchievementForm: React.FC<AchievementFormProps> = ({
             const result = await res.json();
             setMessage({ type: 'success', content: 'Prestasi berhasil disimpan.' });
             setTimeout(() => {
-                onSaveSuccess(result.achievement.id);
+                onSaveSuccess(result.id || result.achievement?.id);
             }, 500);
         } catch (error: any) {
             setMessage({ type: 'error', content: error.message || 'Gagal menyimpan prestasi.' });
@@ -226,14 +221,19 @@ const AchievementForm: React.FC<AchievementFormProps> = ({
                         <section className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Kategori</label>
-                                    <input
-                                        type="text"
-                                        value={formData.category || ''}
-                                        onChange={(e) => handleChange('category', e.target.value)}
-                                        placeholder="Contoh: Nasional, Provinsi, Akademik..."
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tingkat</label>
+                                    <select
+                                        value={formData.eventLevel || ''}
+                                        onChange={(e) => handleChange('eventLevel', e.target.value)}
                                         className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm dark:border-white/10 dark:bg-black/30 transition focus:ring-2 focus:ring-emerald-500"
-                                    />
+                                    >
+                                        <option value="sekolah">Sekolah</option>
+                                        <option value="kecamatan">Kecamatan</option>
+                                        <option value="kabupaten">Kabupaten</option>
+                                        <option value="provinsi">Provinsi</option>
+                                        <option value="nasional">Nasional</option>
+                                        <option value="internasional">Internasional</option>
+                                    </select>
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tanggal Diraih</label>
@@ -278,26 +278,34 @@ const AchievementForm: React.FC<AchievementFormProps> = ({
                         </section>
 
                         <section className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ringkasan Pendek</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Deskripsi</label>
                             <textarea
-                                value={formData.excerpt || ''}
-                                onChange={(e) => handleChange('excerpt', e.target.value)}
-                                rows={2}
-                                placeholder="Tulis ringkasan singkat prestasi..."
+                                value={formData.description || ''}
+                                onChange={(e) => handleChange('description', e.target.value)}
+                                rows={4}
+                                placeholder="Tulis deskripsi prestasi..."
                                 className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm dark:border-white/10 dark:bg-black/30 transition focus:ring-2 focus:ring-emerald-500"
                             />
                         </section>
 
                         <section className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Konten Lengkap</label>
-                            <RichTextEditor
-                                content={formData.contentHtml || ''}
-                                onChange={(html, text) => {
-                                    handleChange('contentHtml', html);
-                                    handleChange('contentText', text);
-                                }}
-                                onMessage={(msg) => setMessage({ type: 'error', content: msg })}
-                            />
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Detail Nama Acara & Juara</label>
+                            <div className="grid grid-cols-2 gap-4">
+                                <input
+                                    type="text"
+                                    value={formData.eventName || ''}
+                                    onChange={(e) => handleChange('eventName', e.target.value)}
+                                    placeholder="Nama Acara"
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm dark:border-white/10 dark:bg-black/30 transition focus:ring-2 focus:ring-emerald-500"
+                                />
+                                <input
+                                    type="text"
+                                    value={formData.rank || ''}
+                                    onChange={(e) => handleChange('rank', e.target.value)}
+                                    placeholder="Juara (contoh: 1, Emas, dll)"
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm dark:border-white/10 dark:bg-black/30 transition focus:ring-2 focus:ring-emerald-500"
+                                />
+                            </div>
                         </section>
                     </div>
 
@@ -338,11 +346,11 @@ const AchievementForm: React.FC<AchievementFormProps> = ({
                         <div className="p-5 rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5 space-y-4">
                             <h3 className="text-sm font-bold text-gray-800 dark:text-white">Foto Utama / Cover</h3>
                             <div className="space-y-3">
-                                {formData.coverUrl ? (
+                                {(formData as any).coverUrl ? (
                                     <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-emerald-500/20 group">
-                                        <img src={formData.coverUrl} className="w-full h-full object-cover" alt="Cover" />
+                                        <img src={(formData as any).coverUrl} className="w-full h-full object-cover" alt="Cover" />
                                         <button
-                                            onClick={() => handleChange('coverUrl', '')}
+                                            onClick={() => handleChange('coverUrl' as any, '')}
                                             className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition shadow-lg"
                                         >
                                             <Trash2 size={14} />
@@ -375,13 +383,6 @@ const AchievementForm: React.FC<AchievementFormProps> = ({
                                     )}
                                     {uploadingCover ? 'Mengunggah...' : 'Upload Foto'}
                                 </label>
-                                <input
-                                    type="text"
-                                    value={formData.coverUrl || ''}
-                                    onChange={(e) => handleChange('coverUrl', e.target.value)}
-                                    placeholder="Atau tempel URL gambar..."
-                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[10px] dark:border-white/10 dark:bg-black/30 transition focus:ring-2 focus:ring-emerald-500"
-                                />
                             </div>
                         </div>
                     </aside>

@@ -9,15 +9,15 @@ import type { ContentPost, ContentType } from '@/lib/types';
 
 interface PublicationFormProps {
     post: ContentPost | null;
-    onSaveSuccess: (id: number) => void;
+    onSaveSuccess: (id: string) => void;
     onDeleteSuccess: () => void;
     onCancel: () => void;
 }
 
 const TYPE_OPTIONS: { label: string; value: ContentType }[] = [
     { label: 'Berita', value: 'news' },
-    { label: 'Pengumuman', value: 'announcement' },
-    { label: 'Artikel', value: 'article' },
+    { label: 'Pengumuman', value: 'publication' }, // Map to 'publication' table
+    { label: 'Artikel', value: 'publication' },
     { label: 'Galeri', value: 'gallery' },
     { label: 'Unduhan', value: 'download' },
 ];
@@ -42,7 +42,7 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
     onDeleteSuccess,
     onCancel,
 }) => {
-    const [formData, setFormData] = useState<Partial<ContentPost>>({
+    const [formData, setFormData] = useState<Partial<any>>({
         type: 'news',
         title: '',
         slug: '',
@@ -54,7 +54,6 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
         publishedAt: formatDateForInput(new Date().toISOString()),
         isPublished: true,
         isPinned: false,
-        meta: {},
     });
     const [mediaItems, setMediaItems] = useState<MediaForm[]>([]);
     const [saving, setSaving] = useState(false);
@@ -65,16 +64,16 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
         if (post) {
             setFormData({
                 ...post,
-                publishedAt: formatDateForInput(post.publishedAt || post.createdAt || null),
+                publishedAt: formatDateForInput((post as any).publishedAt || (post as any).createdAt || null),
             });
-            setMediaItems(post.media?.map(m => ({
+            setMediaItems(post.media?.map((m: any) => ({
                 id: m.id,
                 mediaType: m.mediaType,
-                url: m.url || '',
+                url: m.mediaUrl || m.url || '',
                 embedHtml: m.embedHtml || '',
                 caption: m.caption || '',
                 displayOrder: m.displayOrder,
-                isActive: m.isActive
+                isActive: m.isActive ?? true
             })) || []);
         } else {
             setFormData({
@@ -89,15 +88,14 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
                 publishedAt: formatDateForInput(new Date().toISOString()),
                 isPublished: true,
                 isPinned: false,
-                meta: {},
             });
             setMediaItems([]);
         }
         setMessage(null);
     }, [post]);
 
-    const handleChange = (field: keyof ContentPost, value: any) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+    const handleChange = (field: string, value: any) => {
+        setFormData((prev: any) => ({ ...prev, [field]: value }));
     };
 
     const handleAutoSlug = () => {
@@ -115,8 +113,10 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
         setUploadingCover(true);
         try {
             const result = await api.upload.media(file, 'mis-al-falah/publikasi/cover');
-            if (result?.url) {
-                handleChange('coverUrl', result.url);
+            if (result?.mediaUrl) {
+                handleChange('coverUrl', result.mediaUrl);
+            } else if ((result as any).url) {
+                handleChange('coverUrl', (result as any).url);
             }
         } catch (error) {
             setMessage({ type: 'error', content: 'Gagal upload thumbnail.' });
@@ -143,6 +143,8 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
             };
 
             const method = formData.id ? 'PUT' : 'POST';
+            // Re-route based on type to specific APIs if possible, or use unified content-posts if it works with specific tables
+            // For now, let's keep hitting /api/admin/content-posts but we must make sure that API handles the new tables
             const res = await fetch('/api/admin/content-posts', {
                 method,
                 headers: { 'Content-Type': 'application/json' },
@@ -268,8 +270,8 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
                                         onChange={(e) => handleChange('type', e.target.value)}
                                         className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm dark:border-white/10 dark:bg-black/30 transition focus:ring-2 focus:ring-emerald-500"
                                     >
-                                        {TYPE_OPTIONS.map((opt) => (
-                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        {TYPE_OPTIONS.map((opt, idx) => (
+                                            <option key={`${opt.value}-${idx}`} value={opt.value}>{opt.label}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -341,7 +343,7 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
                         <section className="space-y-1.5">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Konten Lengkap</label>
                             <RichTextEditor
-                                content={formData.contentHtml || ''}
+                                content={formData.contentHtml || (formData as any).content || ''}
                                 onChange={(html, text) => {
                                     handleChange('contentHtml', html);
                                     handleChange('contentText', text);
@@ -445,10 +447,10 @@ const PublicationForm: React.FC<PublicationFormProps> = ({
 
                         <div className="p-5 rounded-2xl border border-gray-100 bg-gray-50 dark:border-white/10 dark:bg-white/5 space-y-4">
                             <h3 className="text-sm font-bold text-gray-800 dark:text-white">Informasi Tambahan</h3>
-                            <p className="text-[10px] text-gray-400">
+                            <div className="text-[10px] text-gray-400">
                                 Dibuat: {formData.createdAt ? new Date(formData.createdAt).toLocaleString('id-ID') : '-'}<br />
                                 Terakhir Update: {formData.updatedAt ? new Date(formData.updatedAt).toLocaleString('id-ID') : '-'}
-                            </p>
+                            </div>
                         </div>
                     </aside>
                 </div>

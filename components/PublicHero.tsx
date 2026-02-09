@@ -1,48 +1,73 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { Loader2, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { PinnedItem } from '@/lib/types';
+import type { HeroItem } from '@/lib/types';
 
 const PublicHero: React.FC = () => {
-    const [pinnedItems, setPinnedItems] = useState<PinnedItem[]>([]);
+    const [heroItems, setHeroItems] = useState<HeroItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentSlide, setCurrentSlide] = useState(0);
     const router = useRouter();
 
     useEffect(() => {
-        const fetchPinned = async () => {
+        const fetchHero = async () => {
             try {
-                const data = await api.getPinnedItems() as PinnedItem[];
-                setPinnedItems(data || []);
+                // In a real app, this would fetch from /api/hero (the view_hero_section)
+                const data = await api.getHeroItems() as HeroItem[];
+                setHeroItems(data || []);
             } catch (error) {
-                console.error('Error fetching pinned items:', error);
+                console.error('Error fetching hero items:', error);
+                // Fallback / Mock data if API is not ready or failed
+                setHeroItems([]);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchPinned();
+        fetchHero();
     }, []);
 
     const nextSlide = useCallback(() => {
-        if (pinnedItems.length <= 1) return;
-        setCurrentSlide((prev) => (prev + 1) % pinnedItems.length);
-    }, [pinnedItems.length]);
+        if (heroItems.length <= 1) return;
+        setCurrentSlide((prev) => (prev + 1) % heroItems.length);
+    }, [heroItems.length]);
 
     const prevSlide = useCallback(() => {
-        if (pinnedItems.length <= 1) return;
-        setCurrentSlide((prev) => (prev - 1 + pinnedItems.length) % pinnedItems.length);
-    }, [pinnedItems.length]);
+        if (heroItems.length <= 1) return;
+        setCurrentSlide((prev) => (prev - 1 + heroItems.length) % heroItems.length);
+    }, [heroItems.length]);
 
     useEffect(() => {
-        if (pinnedItems.length <= 1) return;
+        if (heroItems.length <= 1) return;
         const timer = setInterval(nextSlide, 5000);
         return () => clearInterval(timer);
-    }, [nextSlide, pinnedItems.length]);
+    }, [nextSlide, heroItems.length]);
+
+    const handleItemClick = (item: HeroItem) => {
+        // Dynamic routing based on separate modules
+        switch (item.type) {
+            case 'news':
+                router.push(`/berita/${item.slug}`);
+                break;
+            case 'publication':
+                router.push(`/publikasi/${item.slug}`);
+                break;
+            case 'achievement':
+                router.push(`/prestasi/${item.slug}`);
+                break;
+            case 'gallery':
+                router.push(`/galeri/${item.slug}`);
+                break;
+            case 'download':
+                router.push(`/download`); // Download usually doesn't have a detail page, or maybe it does?
+                break;
+            default:
+                break;
+        }
+    };
 
     if (loading) {
         return (
@@ -52,10 +77,14 @@ const PublicHero: React.FC = () => {
         );
     }
 
-    if (pinnedItems.length === 0) {
+    if (heroItems.length === 0) {
+        // Fallback or Empty State
         return (
             <div className="relative h-[450px] md:h-[650px] flex items-center justify-center bg-black text-white">
-                <p className="text-xl md:text-3xl font-black uppercase tracking-widest opacity-50">tidak ada berita / prestasi</p>
+                <div className="text-center opacity-70">
+                    <h2 className="text-2xl font-bold mb-2">Selamat Datang</h2>
+                    <p>Menunggu konten unggulan...</p>
+                </div>
             </div>
         );
     }
@@ -64,10 +93,10 @@ const PublicHero: React.FC = () => {
         <div className="relative h-[450px] md:h-[700px] w-full overflow-hidden bg-black text-white group">
             {/* Slides */}
             <div className="absolute inset-0">
-                {pinnedItems.map((slide, index) => (
+                {heroItems.map((slide, index) => (
                     <div
                         key={`${slide.type}-${slide.id}`}
-                        onClick={() => router.push(slide.type === 'prestasi' ? `/prestasi/${slide.slug}` : `/publikasi/${slide.slug}`)}
+                        onClick={() => handleItemClick(slide)}
                         className={`absolute inset-0 transition-all duration-1000 ease-in-out cursor-pointer ${index === currentSlide ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 z-0'
                             }`}
                     >
@@ -78,44 +107,61 @@ const PublicHero: React.FC = () => {
                                 alt={slide.title}
                                 className="w-full h-full object-cover"
                             />
+                            {/* Optional Gradient Overlay for text readability */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80" />
                         </div>
 
-                        {/* Content - Just Title */}
-                        <div className="relative z-20 container mx-auto px-4 h-full flex items-center">
-                            <div className="max-w-4xl">
-                                <h1 className="text-4xl md:text-7xl font-black drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] leading-[1.1] animate-fadeInUp">
+                        {/* Content */}
+                        <div className="relative z-20 container mx-auto px-4 h-full flex items-end pb-20 md:pb-32">
+                            <div className="max-w-4xl animate-fadeInUp">
+                                <span className="inline-block px-3 py-1 mb-4 text-xs font-bold tracking-wider uppercase bg-primary text-white rounded-full">
+                                    {slide.type === 'news' ? 'Berita' :
+                                        slide.type === 'publication' ? 'Publikasi' :
+                                            slide.type === 'achievement' ? 'Prestasi' :
+                                                slide.type === 'gallery' ? 'Galeri' : 'Info'}
+                                </span>
+                                <h1 className="text-3xl md:text-5xl lg:text-7xl font-black drop-shadow-lg leading-tight mb-2">
                                     {slide.title}
                                 </h1>
+                                {slide.description && (
+                                    <p className="text-sm md:text-lg text-gray-200 mb-4 line-clamp-2 max-w-2xl">
+                                        {slide.description}
+                                    </p>
+                                )}
+                                <p className="text-sm md:text-base text-gray-300 mb-6">
+                                    {new Date(slide.date).toLocaleDateString('id-ID', { dateStyle: 'long' })}
+                                </p>
+                                <div className="inline-flex items-center gap-2 px-6 py-3 bg-white text-black font-bold rounded-lg hover:bg-emerald-500 hover:text-white transition-all duration-300 shadow-xl">
+                                    Baca Selengkapnya <ArrowRight size={18} />
+                                </div>
                             </div>
                         </div>
                     </div>
                 ))}
             </div>
 
-            {/* Tap/Drag areas for manual navigation */}
-            <div
-                className="absolute inset-x-0 inset-y-0 z-30 flex"
-                onMouseDown={(e) => {
-                    const startX = e.pageX;
-                    const handleMouseUp = (upEvent: MouseEvent) => {
-                        const diff = upEvent.pageX - startX;
-                        if (Math.abs(diff) > 50) {
-                            if (diff > 0) prevSlide();
-                            else nextSlide();
-                        }
-                        window.removeEventListener('mouseup', handleMouseUp);
-                    };
-                    window.addEventListener('mouseup', handleMouseUp);
-                }}
-            >
-                <div className="w-1/2 h-full" onClick={(e) => { e.stopPropagation(); prevSlide(); }} />
-                <div className="w-1/2 h-full" onClick={(e) => { e.stopPropagation(); nextSlide(); }} />
-            </div>
+            {/* Side Navigation Arrows - Subtle */}
+            {heroItems.length > 1 && (
+                <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-between px-4 md:px-8">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); prevSlide(); }}
+                        className="pointer-events-auto p-2 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-all duration-300 backdrop-blur-sm"
+                    >
+                        <ChevronLeft size={24} />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); nextSlide(); }}
+                        className="pointer-events-auto p-2 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-all duration-300 backdrop-blur-sm"
+                    >
+                        <ChevronRight size={24} />
+                    </button>
+                </div>
+            )}
 
             {/* Slide Indicators */}
-            {pinnedItems.length > 1 && (
-                <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-40 flex gap-3">
-                    {pinnedItems.map((_, i) => (
+            {heroItems.length > 1 && (
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 flex gap-3">
+                    {heroItems.map((_, i) => (
                         <button
                             key={i}
                             onClick={(e) => { e.stopPropagation(); setCurrentSlide(i); }}

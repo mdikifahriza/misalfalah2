@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Plus, Calendar, ChevronRight, Pin } from 'lucide-react';
+import { Search, Plus, Calendar, ChevronRight, Pin } from 'lucide-react';
 import type { ContentPost, ContentType } from '@/lib/types';
 
 interface PublicationListProps {
     posts: ContentPost[];
-    selectedId: number | null;
-    onSelect: (id: number) => void;
+    selectedId: string | null;
+    onSelect: (id: string) => void;
     onAdd: () => void;
     loading: boolean;
 }
@@ -15,8 +15,7 @@ interface PublicationListProps {
 const TYPE_OPTIONS: { label: string; value: ContentType | 'all' }[] = [
     { label: 'Semua', value: 'all' },
     { label: 'Berita', value: 'news' },
-    { label: 'Pengumuman', value: 'announcement' },
-    { label: 'Artikel', value: 'article' },
+    { label: 'Pengumuman', value: 'publication' },
     { label: 'Galeri', value: 'gallery' },
     { label: 'Unduhan', value: 'download' },
 ];
@@ -34,7 +33,9 @@ const PublicationList: React.FC<PublicationListProps> = ({
     const filteredPosts = useMemo(() => {
         return posts.filter((post) => {
             const matchesSearch = post.title.toLowerCase().includes(search.toLowerCase());
-            const matchesType = typeFilter === 'all' || post.type === typeFilter;
+            // Map legacy types if needed, or assume post.type is correct
+            const postType = (post as any).type || 'news';
+            const matchesType = typeFilter === 'all' || postType === typeFilter;
             return matchesSearch && matchesType;
         });
     }, [posts, search, typeFilter]);
@@ -64,9 +65,9 @@ const PublicationList: React.FC<PublicationListProps> = ({
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                    {TYPE_OPTIONS.map((opt) => (
+                    {TYPE_OPTIONS.map((opt, idx) => (
                         <button
-                            key={opt.value}
+                            key={`${opt.value}-${idx}`}
                             onClick={() => setTypeFilter(opt.value)}
                             className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition ${typeFilter === opt.value
                                 ? 'bg-emerald-600 text-white'
@@ -91,52 +92,55 @@ const PublicationList: React.FC<PublicationListProps> = ({
                     </div>
                 ) : (
                     <div className="divide-y divide-gray-50 dark:divide-white/5">
-                        {filteredPosts.map((post) => (
-                            <button
-                                key={post.id}
-                                onClick={() => onSelect(post.id)}
-                                className={`w-full p-4 text-left transition-colors flex items-center justify-between group ${selectedId === post.id
-                                    ? 'bg-emerald-50 dark:bg-emerald-500/10 border-l-4 border-emerald-500'
-                                    : 'hover:bg-gray-50 dark:hover:bg-white/5 border-l-4 border-transparent'
-                                    }`}
-                            >
-                                <div className="space-y-1 pr-2 max-w-[85%]">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold ${post.type === 'news' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                                            post.type === 'announcement' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                                                post.type === 'article' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
-                                                    post.type === 'gallery' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                                                        'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-400'
-                                            }`}>
-                                            {post.type}
-                                        </span>
-                                        {!post.isPublished && (
-                                            <span className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">DRAFT</span>
-                                        )}
-                                        {post.isPinned && (
-                                            <Pin size={12} className="text-amber-500 fill-amber-500" />
-                                        )}
+                        {filteredPosts.map((post) => {
+                            const postType = (post as any).type || 'news';
+                            return (
+                                <button
+                                    key={post.id}
+                                    onClick={() => onSelect(post.id)}
+                                    className={`w-full p-4 text-left transition-colors flex items-center justify-between group ${selectedId === post.id
+                                        ? 'bg-emerald-50 dark:bg-emerald-500/10 border-l-4 border-emerald-500'
+                                        : 'hover:bg-gray-50 dark:hover:bg-white/5 border-l-4 border-transparent'
+                                        }`}
+                                >
+                                    <div className="space-y-1 pr-2 max-w-[85%]">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold ${postType === 'news' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                postType === 'announcement' || postType === 'publication' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                                                    postType === 'article' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                                                        postType === 'gallery' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                            'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-400'
+                                                }`}>
+                                                {postType}
+                                            </span>
+                                            {!post.isPublished && (
+                                                <span className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">DRAFT</span>
+                                            )}
+                                            {post.isPinned && (
+                                                <Pin size={12} className="text-amber-500 fill-amber-500" />
+                                            )}
+                                        </div>
+                                        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 line-clamp-1 group-hover:text-emerald-600 transition">
+                                            {post.title}
+                                        </h3>
+                                        <div className="flex items-center gap-2 text-[11px] text-gray-400">
+                                            <Calendar size={12} />
+                                            <span>{new Date((post as any).publishedAt || (post as any).createdAt || '').toLocaleDateString('id-ID')}</span>
+                                            {(post as any).category && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span className="truncate">{(post as any).category}</span>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
-                                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 line-clamp-1 group-hover:text-emerald-600 transition">
-                                        {post.title}
-                                    </h3>
-                                    <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                                        <Calendar size={12} />
-                                        <span>{new Date(post.publishedAt || post.createdAt || '').toLocaleDateString('id-ID')}</span>
-                                        {post.category && (
-                                            <>
-                                                <span>•</span>
-                                                <span className="truncate">{post.category}</span>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                                <ChevronRight
-                                    size={16}
-                                    className={`text-gray-300 transition-transform ${selectedId === post.id ? 'translate-x-1 text-emerald-500' : 'group-hover:translate-x-1'}`}
-                                />
-                            </button>
-                        ))}
+                                    <ChevronRight
+                                        size={16}
+                                        className={`text-gray-300 transition-transform ${selectedId === post.id ? 'translate-x-1 text-emerald-500' : 'group-hover:translate-x-1'}`}
+                                    />
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
             </div>

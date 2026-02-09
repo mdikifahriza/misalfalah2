@@ -1,1420 +1,548 @@
--- Database schema for Supabase (PostgreSQL)
--- Enable required extensions
-create extension if not exists "pgcrypto";
+-- ============================================
+-- REFACTOR DATABASE SCRIPT (UPDATED)
+-- Create 5 Independent Modules + Unified Media
+-- AND REMOVE OLD UNUSED TABLES
+-- ============================================
 
--- Enums
-create type gender as enum ('L', 'P');
-create type graduation_status as enum ('LULUS', 'DITUNDA');
-create type ppdb_status as enum ('VERIFIKASI', 'BERKAS_VALID', 'DITERIMA', 'DITOLAK');
-create type file_type as enum ('PDF', 'DOCX', 'XLSX');
+-- 1. Enable UUID extension if not exists
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-do $$
-begin
-  if not exists (select 1 from pg_type where typname = 'content_type') then
-    create type content_type as enum ('news', 'announcement', 'article', 'gallery', 'download');
-  end if;
-  if not exists (select 1 from pg_type where typname = 'media_type') then
-    create type media_type as enum ('image', 'file', 'embed');
-  end if;
-end $$;
-
--- Utility trigger to auto-update "updatedAt"
-create or replace function set_updated_at()
-returns trigger as $$
-begin
-  new."updatedAt" = now();
-  return new;
-end;
-$$ language plpgsql;
-
--- Core tables
-create table if not exists school_settings (
-  id text primary key default 'main',
-  name text not null,
-  address text not null,
-  phone text not null,
-  email text not null,
-  "logoUrl" text,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-
-create table if not exists hero_slides (
-  id bigserial primary key,
-  "imageUrl" text not null,
-  title text not null,
-  subtitle text not null,
-  "order" integer not null default 0,
-  "isActive" boolean not null default true,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists hero_slides_active_order_idx on hero_slides ("isActive", "order");
-
-create table if not exists highlights (
-  id bigserial primary key,
-  icon text not null,
-  title text not null,
-  description text not null,
-  "order" integer not null default 0,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists highlights_order_idx on highlights ("order");
-
--- Kesiswaan: Ekstrakurikuler
-create table if not exists extracurriculars (
-  id bigserial primary key,
-  name text not null,
-  description text not null,
-  icon text,
-  imageurl text,
-  schedule text,
-  coachname text,
-  displayorder int default 0,
-  isactive boolean default true,
-  createdat timestamptz not null default now(),
-  updatedat timestamptz not null default now()
-);
-create index if not exists idx_extracurriculars_active on extracurriculars(isactive, displayorder);
-
--- Kesiswaan: Pembiasaan Karakter
-create table if not exists character_programs (
-  id bigserial primary key,
-  name text not null,
-  description text not null,
-  icon text,
-  frequency text,
-  displayorder int default 0,
-  isactive boolean default true,
-  createdat timestamptz not null default now(),
-  updatedat timestamptz not null default now()
-);
-create index if not exists idx_character_programs_active on character_programs(isactive, displayorder);
-
--- Banner CTA (site-wide / home)
-create table if not exists site_banners (
-  id bigserial primary key,
-  title text not null,
-  description text,
-  buttontext text not null,
-  buttonlink text not null,
-  backgroundcolor text default '#10b981',
-  textcolor text default '#ffffff',
-  placement text not null check (placement in ('home', 'all', 'custom')),
-  displayorder int default 0,
-  isactive boolean default true,
-  createdat timestamptz not null default now(),
-  updatedat timestamptz not null default now()
-);
-create index if not exists idx_site_banners_active on site_banners(isactive, placement);
-
--- Hero per halaman
-create table if not exists page_heroes (
-  id bigserial primary key,
-  pageslug text not null unique,
-  title text not null,
-  subtitle text,
-  imageurl text not null,
-  overlayopacity decimal(3,2) default 0.5,
-  isactive boolean default true,
-  createdat timestamptz not null default now(),
-  updatedat timestamptz not null default now()
-);
-create index if not exists idx_page_heroes_slug on page_heroes(pageslug);
-
-create table if not exists teachers (
-  id bigserial primary key,
-  name text not null,
-  position text not null,
-  "imageUrl" text,
-  "isActive" boolean not null default true,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists teachers_active_idx on teachers ("isActive");
-
-create table if not exists news (
-  id bigserial primary key,
-  title text not null,
-  slug text not null unique,
-  date timestamptz not null,
-  excerpt text not null,
-  content text,
-  "thumbnailUrl" text,
-  category text not null,
-  "isPublished" boolean not null default true,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists news_published_date_idx on news ("isPublished", date);
-create index if not exists news_category_idx on news (category);
-
--- Unified content posts (news, announcement, article, gallery, download)
-create table if not exists content_posts (
-  id bigserial primary key,
-  type content_type not null,
-  title text not null,
-  slug text not null unique,
-  excerpt text,
-  "contentHtml" text,
-  "contentText" text,
-  "coverUrl" text,
-  category text,
-  "publishedAt" timestamptz,
-  "isPublished" boolean not null default true,
-  is_pinned boolean not null default false,
-  meta jsonb,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists content_posts_type_published_idx on content_posts (type, "isPublished", "publishedAt");
-create index if not exists content_posts_category_idx on content_posts (category);
-
-create table if not exists content_media (
-  id bigserial primary key,
-  "postId" bigint not null references content_posts(id) on delete cascade,
-  "mediaType" media_type not null,
-  url text,
-  "embedHtml" text,
-  caption text,
-  "displayOrder" integer not null default 0,
-  "isActive" boolean not null default true,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists content_media_post_order_idx on content_media ("postId", "displayOrder");
-
--- Achievements (separate module, similar to content)
-create table if not exists achievements (
-  id bigserial primary key,
-  title text not null,
-  slug text not null unique,
-  excerpt text,
-  "contentHtml" text,
-  "contentText" text,
-  "coverUrl" text,
-  category text,
-  "achievedAt" date,
-  "isPublished" boolean not null default true,
-  is_pinned boolean not null default false,
-  meta jsonb,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists achievements_published_idx on achievements ("isPublished", "achievedAt");
-create index if not exists achievements_category_idx on achievements (category);
-
-
-create table if not exists activities (
-  id bigserial primary key,
-  title text not null,
-  "imageUrl" text,
-  "isActive" boolean not null default true,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists activities_active_idx on activities ("isActive");
-
-create table if not exists graduation_students (
-  id bigserial primary key,
-  nisn text not null unique,
-  name text not null,
-  "className" text not null,
-  status graduation_status not null,
-  "averageScore" double precision not null default 0,
-  year text not null,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists graduation_students_year_idx on graduation_students (year);
-
-create table if not exists download_files (
-  id bigserial primary key,
-  title text not null,
-  category text not null,
-  date timestamptz not null,
-  size text not null,
-  "fileType" file_type not null,
-  "fileUrl" text not null,
-  "isActive" boolean not null default true,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists download_files_active_category_idx on download_files ("isActive", category);
-
-create table if not exists ppdb_registrations (
-  id uuid primary key default gen_random_uuid(),
-  "namaLengkap" text not null,
-  nik text not null,
-  nisn text,
-  "tempatLahir" text not null,
-  "tanggalLahir" date not null,
-  "jenisKelamin" gender not null,
-  alamat text not null,
-  "namaAyah" text not null,
-  "pekerjaanAyah" text,
-  "namaIbu" text not null,
-  "pekerjaanIbu" text,
-  "noHp" text not null,
-  status ppdb_status not null default 'VERIFIKASI',
-  pesan text,
-  "tanggalDaftar" timestamptz not null default now(),
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists ppdb_registrations_status_date_idx on ppdb_registrations (status, "tanggalDaftar");
-
--- Admin users (separate table for admin panel access)
--- Admin users for public web (separate table for admin panel access)
-create table if not exists admin_publicweb (
-  id uuid primary key default gen_random_uuid(),
-  username text not null unique,
-  password_hash text not null,
-  user_role text not null default 'admin' check (user_role in ('admin', 'superadmin')),
-  full_name text not null,
-  email text,
-  phone text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+-- 2. Create timestamp updater function
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
 
 -- ============================================
--- TABLE: site_settings
--- Menyimpan pengaturan umum website
+-- 1. MODULE: BERITA (NEWS)
 -- ============================================
-create table if not exists site_settings (
-  id uuid primary key default gen_random_uuid(),
-  school_name text not null,
-  school_logo_url text,
-  school_address text,
-  school_phone text,
-  school_email text,
-  school_whatsapp text,
-  school_tagline text,
-  is_active boolean default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+DROP TABLE IF EXISTS news_posts CASCADE;
+CREATE TABLE news_posts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    excerpt TEXT,
+    content TEXT,
+    author_name TEXT DEFAULT 'Admin',
+    published_at TIMESTAMPTZ DEFAULT NOW(),
+    is_published BOOLEAN DEFAULT TRUE,
+    is_pinned BOOLEAN DEFAULT FALSE, -- Untuk Hero Section
+    view_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Tambahan field SEO & tracking
-alter table site_settings 
-add column if not exists favicon_url text,
-add column if not exists meta_description text,
-add column if not exists meta_keywords text,
-add column if not exists google_analytics_id text,
-add column if not exists facebook_pixel_id text;
+-- Trigger
+CREATE TRIGGER update_news_posts_modtime
+    BEFORE UPDATE ON news_posts
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- ============================================
--- TABLE: social_media_links
--- Menyimpan link sosial media
+-- 2. MODULE: PUBLIKASI (PUBLICATIONS)
+-- Cakupan: Pengumuman, Artikel Ilmiah, Buletin
 -- ============================================
-create table if not exists social_media_links (
-  id uuid primary key default gen_random_uuid(),
-  platform text not null check (platform in ('facebook', 'instagram', 'youtube', 'twitter', 'tiktok', 'linkedin')),
-  url text not null,
-  display_order int default 0,
-  is_active boolean default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+DROP TABLE IF EXISTS publications CASCADE;
+CREATE TABLE publications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    type TEXT NOT NULL CHECK (type IN ('announcement', 'article', 'bulletin')),
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    content TEXT,
+    published_at TIMESTAMPTZ DEFAULT NOW(),
+    is_published BOOLEAN DEFAULT TRUE,
+    is_pinned BOOLEAN DEFAULT FALSE, -- Untuk Hero Section
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================
--- TABLE: navigation_menu
--- Menyimpan menu navigasi (header)
--- ============================================
-create table if not exists navigation_menu (
-  id uuid primary key default gen_random_uuid(),
-  label text not null,
-  href text,
-  parent_id uuid references navigation_menu(id) on delete cascade,
-  display_order int default 0,
-  is_active boolean default true,
-  icon text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists idx_navigation_parent on navigation_menu(parent_id);
-create index if not exists idx_navigation_order on navigation_menu(display_order);
+-- Trigger
+CREATE TRIGGER update_publications_modtime
+    BEFORE UPDATE ON publications
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- ============================================
--- TABLE: footer_quick_links
--- Menyimpan tautan cepat di footer
+-- 3. MODULE: PRESTASI (ACHIEVEMENTS)
 -- ============================================
-create table if not exists footer_quick_links (
-  id uuid primary key default gen_random_uuid(),
-  label text not null,
-  href text not null,
-  display_order int default 0,
-  is_active boolean default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+DROP TABLE IF EXISTS achievements CASCADE;
+CREATE TABLE achievements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    event_name TEXT,
+    event_level TEXT CHECK (event_level IN ('sekolah', 'kecamatan', 'kabupaten', 'provinsi', 'nasional', 'internasional')),
+    rank TEXT, -- Juara 1, 2, 3, Harapan 1, dsb
+    achieved_at DATE DEFAULT CURRENT_DATE,
+    is_published BOOLEAN DEFAULT TRUE,
+    is_pinned BOOLEAN DEFAULT FALSE, -- Untuk Hero Section
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================
--- TABLE: headmaster_greeting
--- Menyimpan sambutan kepala madrasah
--- ============================================
-create table if not exists headmaster_greeting (
-  id uuid primary key default gen_random_uuid(),
-  title text not null,
-  subtitle text,
-  content_json jsonb,
-  content_html text,
-  content_text text,
-  headmaster_name text not null,
-  headmaster_title text,
-  photo_url text,
-  is_active boolean default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+-- Trigger
+CREATE TRIGGER update_achievements_modtime
+    BEFORE UPDATE ON achievements
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- ============================================
--- TABLE: history_page
--- Menyimpan halaman sejarah madrasah
+-- 4. MODULE: GALERI (GALLERIES)
 -- ============================================
-create table if not exists history_page (
-  id uuid primary key default gen_random_uuid(),
-  title text not null default 'Sejarah Madrasah',
-  subtitle text,
-  content_json jsonb,
-  content_html text,
-  content_text text,
-  cover_image_url text,
-  video_url text,
-  is_active boolean default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+DROP TABLE IF EXISTS galleries CASCADE;
+CREATE TABLE galleries (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    event_date DATE DEFAULT CURRENT_DATE,
+    is_published BOOLEAN DEFAULT TRUE,
+    is_pinned BOOLEAN DEFAULT FALSE, -- Untuk Hero Section
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================
--- TABLE: history_timeline_items
--- Menyimpan timeline sejarah
--- ============================================
-create table if not exists history_timeline_items (
-  id uuid primary key default gen_random_uuid(),
-  history_page_id uuid not null references history_page(id) on delete cascade,
-  year text not null,
-  title text not null,
-  description_json jsonb,
-  description_html text,
-  description_text text,
-  media_url text,
-  display_order int default 0,
-  is_active boolean default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists history_timeline_items_page_order_idx on history_timeline_items(history_page_id, display_order);
+-- Trigger
+CREATE TRIGGER update_galleries_modtime
+    BEFORE UPDATE ON galleries
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
 -- ============================================
--- TABLE: vision_mission_page
--- Menyimpan halaman visi dan misi (simpel)
+-- 5. MODULE: DOWNLOAD (DOWNLOADS)
 -- ============================================
-create table if not exists vision_mission_page (
-  id uuid primary key default gen_random_uuid(),
-  vision_text text not null,
-  mission_text text not null,
-  is_active boolean default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists vision_mission_page_active_idx on vision_mission_page(is_active);
-
--- Activity logs (opsional)
-create table if not exists admin_activities (
-  id uuid primary key default gen_random_uuid(),
-  admin_id uuid not null references admin_publicweb(id) on delete cascade,
-  action text not null,
-  resource_type text not null,
-  resource_id text,
-  description text,
-  ip_address text,
-  created_at timestamptz not null default now()
-);
-create index if not exists idx_admin_activities_admin on admin_activities(admin_id, created_at);
-create index if not exists idx_admin_activities_resource on admin_activities(resource_type, resource_id);
-
--- Content pages
-create table if not exists profile_page (
-  id text primary key default 'main',
-  "descriptionJson" jsonb,
-  "descriptionHtml" text,
-  "descriptionText" text,
-  "videoUrl" text,
-  "schoolName" text not null,
-  npsn text not null,
-  "schoolAddress" text not null,
-  village text not null,
-  district text not null,
-  city text not null,
-  province text not null,
-  "schoolStatus" text not null,
-  "educationForm" text not null,
-  "educationLevel" text not null,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
+DROP TABLE IF EXISTS downloads CASCADE;
+CREATE TABLE downloads (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    file_url TEXT, -- Legacy single file (Supabase Storage), optional
+    file_type TEXT, -- Legacy mime/ext
+    file_size_kb INTEGER, 
+    download_count INTEGER DEFAULT 0,
+    is_published BOOLEAN DEFAULT TRUE,
+    is_pinned BOOLEAN DEFAULT FALSE, -- Untuk Hero Section
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create table if not exists profile_mission_items (
-  id bigserial primary key,
-  "pageId" text not null references profile_page(id) on delete cascade,
-  text text not null,
-  "order" integer not null default 0,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists profile_mission_items_page_order_idx on profile_mission_items ("pageId", "order");
+-- Trigger
+CREATE TRIGGER update_downloads_modtime
+    BEFORE UPDATE ON downloads
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
-create table if not exists profile_identity_items (
-  id bigserial primary key,
-  "pageId" text not null references profile_page(id) on delete cascade,
-  label text not null,
-  value text not null,
-  "order" integer not null default 0,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists profile_identity_items_page_order_idx on profile_identity_items ("pageId", "order");
-
-create table if not exists academic_page (
-  id text primary key default 'main',
-  "heroTitle" text not null,
-  "heroSubtitle" text not null,
-  "heroImageUrl" text,
-  "curriculumTitle" text not null,
-  "curriculumIntro1" text not null,
-  "curriculumIntro2" text not null,
-  "subjectsTitle" text not null,
-  "programsTitle" text not null,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
+-- Lampiran multi-file untuk downloads (Supabase Storage)
+DROP TABLE IF EXISTS download_files CASCADE;
+CREATE TABLE download_files (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    download_id UUID NOT NULL REFERENCES downloads(id) ON DELETE CASCADE,
+    file_name TEXT NOT NULL,
+    file_type TEXT,
+    file_size_kb INTEGER,
+    storage_path TEXT NOT NULL,
+    public_url TEXT NOT NULL,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create table if not exists academic_subjects (
-  id bigserial primary key,
-  "pageId" text not null references academic_page(id) on delete cascade,
-  name text not null,
-  "order" integer not null default 0,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists academic_subjects_page_order_idx on academic_subjects ("pageId", "order");
+CREATE INDEX idx_download_files_download_id ON download_files(download_id, display_order);
 
-create table if not exists academic_programs (
-  id bigserial primary key,
-  "pageId" text not null references academic_page(id) on delete cascade,
-  title text not null,
-  description text not null,
-  icon text,
-  "order" integer not null default 0,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
-);
-create index if not exists academic_programs_page_order_idx on academic_programs ("pageId", "order");
-
-create table if not exists contact_page (
-  id text primary key default 'main',
-  address text not null,
-  phone text,
-  email text not null,
-  "whatsappList" jsonb not null default '[]'::jsonb,
-  "adminWhatsappId" text,
-  "mapEmbedHtml" text not null,
-  "createdAt" timestamptz not null default now(),
-  "updatedAt" timestamptz not null default now()
+-- ============================================
+-- 6. UNIFIED MEDIA TABLE
+-- ============================================
+DROP TABLE IF EXISTS media_items CASCADE;
+CREATE TABLE media_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('news', 'publication', 'achievement', 'gallery', 'download', 'academic', 'ppdb')),
+    entity_id UUID NOT NULL, -- Referensi ID ke tabel terkait
+    media_type TEXT NOT NULL DEFAULT 'image' CHECK (media_type IN ('image', 'video', 'youtube_embed')),
+    media_url TEXT NOT NULL, -- URL Gambar/Video (Google/Cloudinary)
+    thumbnail_url TEXT,
+    caption TEXT,
+    is_main BOOLEAN DEFAULT FALSE, -- Jika true, jadi cover image
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Triggers for updatedAt
-create trigger school_settings_updated_at before update on school_settings
-for each row execute function set_updated_at();
-create trigger hero_slides_updated_at before update on hero_slides
-for each row execute function set_updated_at();
-create trigger highlights_updated_at before update on highlights
-for each row execute function set_updated_at();
-create trigger teachers_updated_at before update on teachers
-for each row execute function set_updated_at();
-create trigger news_updated_at before update on news
-for each row execute function set_updated_at();
-create trigger content_posts_updated_at before update on content_posts
-for each row execute function set_updated_at();
-create trigger content_media_updated_at before update on content_media
-for each row execute function set_updated_at();
-create trigger achievements_updated_at before update on achievements
-for each row execute function set_updated_at();
-create trigger achievement_media_updated_at before update on achievement_media
-for each row execute function set_updated_at();
-create trigger activities_updated_at before update on activities
-for each row execute function set_updated_at();
-create trigger graduation_students_updated_at before update on graduation_students
-for each row execute function set_updated_at();
-create trigger download_files_updated_at before update on download_files
-for each row execute function set_updated_at();
-create trigger ppdb_registrations_updated_at before update on ppdb_registrations
-for each row execute function set_updated_at();
--- Function to update updated_at timestamp (snake_case columns)
-create or replace function set_updated_at_snake()
-returns trigger as $$
-begin
-  if (exists (select 1 where 'updated_at' = any (select column_name from information_schema.columns where table_name = TG_TABLE_NAME))) then
-    new.updated_at = now();
-  elsif (exists (select 1 where 'updatedat' = any (select column_name from information_schema.columns where table_name = TG_TABLE_NAME))) then
-    new.updatedat = now();
-  end if;
-  return new;
-end;
-$$ language plpgsql;
+CREATE INDEX idx_media_entity ON media_items(entity_type, entity_id);
 
-create trigger admin_publicweb_updated_at
-before update on admin_publicweb
-for each row execute function set_updated_at_snake();
-create trigger site_settings_updated_at
-before update on site_settings
-for each row execute function set_updated_at_snake();
-create trigger social_media_links_updated_at
-before update on social_media_links
-for each row execute function set_updated_at_snake();
-create trigger navigation_menu_updated_at
-before update on navigation_menu
-for each row execute function set_updated_at_snake();
-create trigger footer_quick_links_updated_at
-before update on footer_quick_links
-for each row execute function set_updated_at_snake();
-create trigger headmaster_greeting_updated_at
-before update on headmaster_greeting
-for each row execute function set_updated_at_snake();
-create trigger history_page_updated_at
-before update on history_page
-for each row execute function set_updated_at_snake();
-create trigger history_timeline_items_updated_at
-before update on history_timeline_items
-for each row execute function set_updated_at_snake();
-create trigger vision_mission_page_updated_at
-before update on vision_mission_page
-for each row execute function set_updated_at_snake();
-create trigger extracurriculars_updated_at
-before update on extracurriculars
-for each row execute function set_updated_at_snake();
-create trigger character_programs_updated_at
-before update on character_programs
-for each row execute function set_updated_at_snake();
-create trigger site_banners_updated_at
-before update on site_banners
-for each row execute function set_updated_at_snake();
-create trigger page_heroes_updated_at
-before update on page_heroes
-for each row execute function set_updated_at_snake();
-create trigger profile_page_updated_at before update on profile_page
-for each row execute function set_updated_at();
-create trigger profile_mission_items_updated_at before update on profile_mission_items
-for each row execute function set_updated_at();
-create trigger profile_identity_items_updated_at before update on profile_identity_items
-for each row execute function set_updated_at();
-create trigger academic_page_updated_at before update on academic_page
-for each row execute function set_updated_at();
-create trigger academic_subjects_updated_at before update on academic_subjects
-for each row execute function set_updated_at();
-create trigger academic_programs_updated_at before update on academic_programs
-for each row execute function set_updated_at();
-create trigger contact_page_updated_at before update on contact_page
-for each row execute function set_updated_at();
+-- ============================================
+-- 6.1 ROW LEVEL SECURITY (PUBLIC READ)
+-- ============================================
+ALTER TABLE academic_pages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE academic_sections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media_items ENABLE ROW LEVEL SECURITY;
 
--- Enable RLS on all tables
-alter table school_settings enable row level security;
-alter table hero_slides enable row level security;
-alter table highlights enable row level security;
-alter table teachers enable row level security;
-alter table news enable row level security;
-alter table content_posts enable row level security;
-alter table content_media enable row level security;
-alter table achievements enable row level security;
-alter table achievement_media enable row level security;
-alter table activities enable row level security;
-alter table graduation_students enable row level security;
-alter table download_files enable row level security;
-alter table ppdb_registrations enable row level security;
-alter table admin_publicweb enable row level security;
-alter table site_settings enable row level security;
-alter table social_media_links enable row level security;
-alter table navigation_menu enable row level security;
-alter table footer_quick_links enable row level security;
-alter table headmaster_greeting enable row level security;
-alter table history_page enable row level security;
-alter table history_timeline_items enable row level security;
-alter table vision_mission_page enable row level security;
-alter table extracurriculars enable row level security;
-alter table character_programs enable row level security;
-alter table site_banners enable row level security;
-alter table page_heroes enable row level security;
-alter table admin_activities enable row level security;
-alter table profile_page enable row level security;
-alter table profile_mission_items enable row level security;
-alter table profile_identity_items enable row level security;
-alter table academic_page enable row level security;
-alter table academic_subjects enable row level security;
-alter table academic_programs enable row level security;
-alter table contact_page enable row level security;
+DROP POLICY IF EXISTS anon_read_academic_pages ON academic_pages;
+CREATE POLICY anon_read_academic_pages
+ON academic_pages
+FOR SELECT
+TO anon
+USING (true);
 
--- Policies: anon can read only
-create policy "anon_read_school_settings" on school_settings for select to anon using (true);
-create policy "anon_read_hero_slides" on hero_slides for select to anon using (true);
-create policy "anon_read_highlights" on highlights for select to anon using (true);
-create policy "anon_read_teachers" on teachers for select to anon using (true);
-create policy "anon_read_news" on news for select to anon using (true);
-create policy "anon_read_content_posts" on content_posts for select to anon using ("isPublished" = true);
-create policy "anon_read_content_media" on content_media for select to anon using ("isActive" = true);
-create policy "anon_read_achievements" on achievements for select to anon using ("isPublished" = true);
-create policy "anon_read_achievement_media" on achievement_media for select to anon using ("isActive" = true);
-create policy "anon_read_activities" on activities for select to anon using (true);
-create policy "anon_read_graduation_students" on graduation_students for select to anon using (true);
-create policy "anon_read_download_files" on download_files for select to anon using (true);
-create policy "anon_read_ppdb_registrations" on ppdb_registrations for select to anon using (true);
--- RLS Policies (optional - sesuaikan dengan kebutuhan)
--- Policy untuk superadmin bisa akses semua
-create policy "Superadmin can do everything"
-on admin_publicweb
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid() and user_role = 'superadmin'
-  )
+DROP POLICY IF EXISTS anon_read_academic_sections ON academic_sections;
+CREATE POLICY anon_read_academic_sections
+ON academic_sections
+FOR SELECT
+TO anon
+USING (true);
+
+DROP POLICY IF EXISTS anon_read_media_items ON media_items;
+CREATE POLICY anon_read_media_items
+ON media_items
+FOR SELECT
+TO anon
+USING (true);
+
+-- ============================================
+-- 6.5 NAVIGATION MENU (HEADER)
+-- ============================================
+DROP TABLE IF EXISTS navigation_menu CASCADE;
+CREATE TABLE navigation_menu (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    label TEXT NOT NULL,
+    href TEXT,
+    parent_id UUID REFERENCES navigation_menu(id) ON DELETE SET NULL,
+    display_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    icon TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Policy untuk admin hanya bisa lihat data sendiri
-create policy "Admin can view own data"
-on admin_publicweb
-for select
-using (id = auth.uid() or user_role = 'superadmin');
-create policy "anon_read_profile_page" on profile_page for select to anon using (true);
-create policy "anon_read_profile_mission_items" on profile_mission_items for select to anon using (true);
-create policy "anon_read_profile_identity_items" on profile_identity_items for select to anon using (true);
-create policy "anon_read_academic_page" on academic_page for select to anon using (true);
-create policy "anon_read_academic_subjects" on academic_subjects for select to anon using (true);
-create policy "anon_read_academic_programs" on academic_programs for select to anon using (true);
-create policy "anon_read_contact_page" on contact_page for select to anon using (true);
+CREATE INDEX idx_navigation_parent ON navigation_menu(parent_id, display_order);
 
-create policy "anon_read_extracurriculars" on extracurriculars for select to anon using (isactive = true);
-create policy "anon_read_character_programs" on character_programs for select to anon using (isactive = true);
-create policy "anon_read_site_banners" on site_banners for select to anon using (isactive = true);
-create policy "anon_read_page_heroes" on page_heroes for select to anon using (isactive = true);
+CREATE TRIGGER update_navigation_menu_modtime
+    BEFORE UPDATE ON navigation_menu
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
--- Policies: public web settings
-create policy "Anyone can read site settings"
-on site_settings
-for select
-using (is_active = true);
+-- ============================================
+-- 7. HERO SECTION VIEW
+-- Mengambil item yang di-pin dari semua modul
+-- ============================================
+CREATE OR REPLACE VIEW view_hero_section AS
+SELECT 
+    id, 'news' AS type, title, slug, published_at AS date, is_pinned 
+FROM news_posts WHERE is_pinned = TRUE AND is_published = TRUE
+UNION ALL
+SELECT 
+    id, 'publication' AS type, title, slug, published_at AS date, is_pinned 
+FROM publications WHERE is_pinned = TRUE AND is_published = TRUE
+UNION ALL
+SELECT 
+    id, 'achievement' AS type, title, slug, achieved_at::timestamp AS date, is_pinned 
+FROM achievements WHERE is_pinned = TRUE AND is_published = TRUE
+UNION ALL
+SELECT 
+    id, 'gallery' AS type, title, slug, event_date::timestamp AS date, is_pinned 
+FROM galleries WHERE is_pinned = TRUE AND is_published = TRUE
+UNION ALL
+SELECT 
+    id, 'download' AS type, title, slug, created_at AS date, is_pinned 
+FROM downloads WHERE is_pinned = TRUE AND is_published = TRUE
+ORDER BY date DESC;
 
-create policy "Only admin can modify site settings"
-on site_settings
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
 
-create policy "Anyone can read active social media"
-on social_media_links
-for select
-using (is_active = true);
+-- ============================================
+-- 8. DUMMY DATA SEEDING
+-- ============================================
 
-create policy "Only admin can modify social media"
-on social_media_links
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Anyone can read active navigation"
-on navigation_menu
-for select
-using (is_active = true);
-
-create policy "Only admin can modify navigation"
-on navigation_menu
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can modify content posts"
-on content_posts
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can modify content media"
-on content_media
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can modify achievements"
-on achievements
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can modify achievement media"
-on achievement_media
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Anyone can read active footer links"
-on footer_quick_links
-for select
-using (is_active = true);
-
-create policy "Only admin can modify footer links"
-on footer_quick_links
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Anyone can read active headmaster greeting"
-on headmaster_greeting
-for select
-using (is_active = true);
-
-create policy "Only admin can modify headmaster greeting"
-on headmaster_greeting
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Anyone can read active history page"
-on history_page
-for select
-using (is_active = true);
-
-create policy "Only admin can modify history page"
-on history_page
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Anyone can read active history timeline"
-on history_timeline_items
-for select
-using (is_active = true);
-
-create policy "Only admin can modify history timeline"
-on history_timeline_items
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Anyone can read active vision mission"
-on vision_mission_page
-for select
-using (is_active = true);
-
-create policy "Only admin can modify vision mission"
-on vision_mission_page
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can modify extracurriculars"
-on extracurriculars
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can modify character programs"
-on character_programs
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can modify site banners"
-on site_banners
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can modify page heroes"
-on page_heroes
-for all
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
-create policy "Only admin can read activity logs"
-on admin_activities
-for select
-using (
-  exists (
-    select 1 from admin_publicweb
-    where id = auth.uid()
-  )
-);
-
--- Seed dummy admin accounts
--- Note: bcryptjs default menggunakan 10 rounds
-insert into admin_publicweb (username, password_hash, user_role, full_name, email, phone)
-values 
-  (
-    'superadmin', 
-    crypt('superadmin123', gen_salt('bf', 10)), 
-    'superadmin',
-    'Kang Dedi',
-    'superadmin@misalfalah.sch.id',
-    '081234567890'
-  ),
-  (
-    'admin', 
-    crypt('admin12345', gen_salt('bf', 10)), 
-    'admin',
-    'Kang Mulet',
-    'admin@misalfalah.sch.id',
-    '081234567891'
-  )
-on conflict (username)
-do update set
-  password_hash = excluded.password_hash,
-  user_role = excluded.user_role,
-  full_name = excluded.full_name,
-  email = excluded.email,
-  phone = excluded.phone;
-
--- Seed data awal site settings
-insert into site_settings (
-  school_name, 
-  school_logo_url, 
-  school_address, 
-  school_phone, 
-  school_email,
-  school_whatsapp,
-  school_tagline
+-- A. SEED BERITA
+WITH new_news AS (
+    INSERT INTO news_posts (title, slug, excerpt, content, is_pinned) 
+    VALUES 
+    ('Kunjungan Dinas Pendidikan ke MI Al-Falah', 'kunjungan-dinas-2026', 'Kepala Dinas mengapresiasi kemajuan sekolah.', 'Lorem ipsum content berita lengkap...', TRUE),
+    ('Kegiatan Pesantren Kilat Ramadhan', 'pesantren-kilat-2026', 'Siswa antusias mengikuti kegiatan keagamaan.', 'Isi berita pesantren kilat...', FALSE)
+    RETURNING id
 )
-values (
-  'MIS Al-Falah Kanigoro',
-  '/images/logo.png',
-  'Jl. Raya Kanigoro No. 123, Blitar, Jawa Timur',
-  '(0342) 123456',
-  'info@misalfalah.sch.id',
-  '6281234567890',
-  'Mencetak generasi cerdas, berakhlak mulia, dan berwawasan global dengan landasan nilai-nilai Islami yang kuat.'
+INSERT INTO media_items (entity_type, entity_id, media_url, is_main)
+SELECT 'news', id, 'https://lh3.googleusercontent.com/d/YOUR_GOOGLE_IMAGE_ID_1', TRUE FROM new_news LIMIT 1;
+
+-- B. SEED PUBLIKASI
+INSERT INTO publications (type, title, slug, content, is_pinned)
+VALUES 
+('announcement', 'Penerimaan Peserta Didik Baru 2026/2027', 'ppdb-2026', 'Pendaftaran dibuka mulai tanggal...', TRUE),
+('article', 'Pentingnya Pendidikan Karakter', 'pendidikan-karakter', 'Artikel tentang pendidikan karakter...', FALSE);
+
+-- C. SEED PRESTASI
+WITH new_achievement AS (
+    INSERT INTO achievements (title, slug, event_level, rank, is_pinned)
+    VALUES 
+    ('Juara 1 Lomba Pidato Bahasa Arab', 'juara-pidato-arab-2026', 'kabupaten', 'Juara 1', TRUE),
+    ('Medali Perak Olimpiade Sains', 'medali-perak-sains', 'provinsi', 'Medali Perak', TRUE)
+    RETURNING id
+)
+INSERT INTO media_items (entity_type, entity_id, media_url, is_main)
+SELECT 'achievement', id, 'https://lh3.googleusercontent.com/d/YOUR_GOOGLE_IMAGE_ID_2', TRUE FROM new_achievement;
+
+-- D. SEED GALERI
+WITH new_gallery AS (
+    INSERT INTO galleries (title, slug, description, is_pinned)
+    VALUES 
+    ('Dokumentasi Wisuda 2025', 'wisuda-2025', 'Foto-foto kegiatan wisuda...', FALSE),
+    ('Karnaval Budaya', 'karnaval-budaya-2026', 'Kegiatan pawai budaya keliling desa.', TRUE)
+    RETURNING id
+)
+INSERT INTO media_items (entity_type, entity_id, media_url, display_order)
+SELECT 'gallery', id, 'https://lh3.googleusercontent.com/d/YOUR_GOOGLE_IMAGE_ID_3', 1 FROM new_gallery;
+
+-- E. SEED DOWNLOAD
+INSERT INTO downloads (title, slug, file_url, file_type, is_pinned)
+VALUES 
+('Brosur PPDB 2026', 'brosur-ppdb-2026', 'https://drive.google.com/uc?id=YOUR_FILE_ID_1', 'PDF', TRUE),
+('Kalender Akademik 2026', 'kalender-2026', 'https://drive.google.com/uc?id=YOUR_FILE_ID_2', 'PDF', FALSE);
+
+-- F. SEED NAVIGATION MENU (HEADER)
+INSERT INTO navigation_menu
+(id, label, href, parent_id, display_order, is_active, icon, created_at, updated_at)
+VALUES
+('00000000-0000-0000-0000-000000000001','Beranda','/',NULL,1,TRUE,NULL,now(),now()),
+('00000000-0000-0000-0000-000000000002','Profil',NULL,NULL,2,TRUE,NULL,now(),now()),
+('00000000-0000-0000-0000-000000000003','Akademik',NULL,NULL,3,TRUE,NULL,now(),now()),
+('00000000-0000-0000-0000-000000000004','Informasi',NULL,NULL,4,TRUE,NULL,now(),now()),
+('00000000-0000-0000-0000-000000000005','PPDB','/ppdb',NULL,5,TRUE,NULL,now(),now());
+
+INSERT INTO navigation_menu
+(id, label, href, parent_id, display_order, is_active, icon, created_at, updated_at)
+VALUES
+('11111111-1111-1111-1111-111111111111','Sambutan','/sambutan','00000000-0000-0000-0000-000000000002',1,TRUE,NULL,now(),now()),
+('22222222-2222-2222-2222-222222222222','Profil Madrasah','/profil','00000000-0000-0000-0000-000000000002',2,TRUE,NULL,now(),now()),
+('33333333-3333-3333-3333-333333333333','Sejarah Madrasah','/sejarah','00000000-0000-0000-0000-000000000002',3,TRUE,NULL,now(),now()),
+('44444444-4444-4444-4444-444444444444','Visi & Misi','/visimisi','00000000-0000-0000-0000-000000000002',4,TRUE,NULL,now(),now()),
+('55555555-5555-5555-5555-555555555555','Kontak','/kontak','00000000-0000-0000-0000-000000000002',5,TRUE,NULL,now(),now());
+
+INSERT INTO navigation_menu
+(id, label, href, parent_id, display_order, is_active, icon, created_at, updated_at)
+VALUES
+('66666666-6666-6666-6666-666666666666','Akademik','/akademik','00000000-0000-0000-0000-000000000003',1,TRUE,NULL,now(),now()),
+('77777777-7777-7777-7777-777777777777','Kesiswaan','/kesiswaan','00000000-0000-0000-0000-000000000003',2,TRUE,NULL,now(),now()),
+('88888888-8888-8888-8888-888888888888','Guru','/guru','00000000-0000-0000-0000-000000000003',3,TRUE,NULL,now(),now());
+
+INSERT INTO navigation_menu
+(id, label, href, parent_id, display_order, is_active, icon, created_at, updated_at)
+VALUES
+('99999999-9999-9999-9999-999999999991','Berita','/berita','00000000-0000-0000-0000-000000000004',1,TRUE,NULL,now(),now()),
+('99999999-9999-9999-9999-999999999992','Publikasi','/publikasi','00000000-0000-0000-0000-000000000004',2,TRUE,NULL,now(),now()),
+('99999999-9999-9999-9999-999999999993','Galeri','/galeri','00000000-0000-0000-0000-000000000004',3,TRUE,NULL,now(),now()),
+('99999999-9999-9999-9999-999999999994','Prestasi','/prestasi','00000000-0000-0000-0000-000000000004',4,TRUE,NULL,now(),now()),
+('99999999-9999-9999-9999-999999999995','Kelulusan','/kelulusan','00000000-0000-0000-0000-000000000004',5,TRUE,NULL,now(),now()),
+('99999999-9999-9999-9999-999999999996','Unduhan','/download','00000000-0000-0000-0000-000000000004',6,TRUE,NULL,now(),now()),
+('99999999-9999-9999-9999-999999999997','RDM','https://rdm.mialfalahkanigoroblitar.sch.id/','00000000-0000-0000-0000-000000000004',7,TRUE,NULL,now(),now()),
+('99999999-9999-9999-9999-999999999998','E-Learning','https://elearning.mialfalahkanigoroblitar.sch.id/','00000000-0000-0000-0000-000000000004',8,TRUE,NULL,now(),now()),
+('99999999-9999-9999-9999-999999999999','CBTM','https://misalfalah.cbtm.my.id/login','00000000-0000-0000-0000-000000000004',9,TRUE,NULL,now(),now());
+
+-- ============================================
+-- 9. CLEANUP / DROP OLD TABLES
+-- Hapus tabel lama yang sudah digantikan
+-- ============================================
+
+-- Hapus tabel 'content_posts' (yang dulu dicampur)
+-- Hapus tabel 'news' (versi lama)
+-- Hapus tabel 'download_files' (versi lama)
+-- Hapus tabel media lama
+
+DROP TABLE IF EXISTS content_media CASCADE;
+DROP TABLE IF EXISTS content_posts CASCADE;
+DROP TABLE IF EXISTS news CASCADE;
+DROP TABLE IF EXISTS achievement_media CASCADE;
+DROP TABLE IF EXISTS academic_subjects CASCADE;
+DROP TABLE IF EXISTS academic_programs CASCADE;
+DROP TABLE IF EXISTS academic_page CASCADE;
+-- DROP TABLE IF EXISTS highlights CASCADE; -- Opsional, jika sudah tidak dipakai
+
+-- ============================================
+-- 10. MODULE: AKADEMIK (SIMPLIFIED)
+-- ============================================
+DROP TABLE IF EXISTS academic_sections CASCADE;
+DROP TABLE IF EXISTS academic_pages CASCADE;
+
+CREATE TABLE academic_pages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    subtitle TEXT,
+    content TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-update site_settings
-set
-  favicon_url = '/favicon.ico',
-  meta_description = 'Website resmi MI Al-Falah Kanigoro - Madrasah Ibtidaiyah swasta berkualitas di Blitar, Jawa Timur',
-  meta_keywords = 'madrasah, MI, Al-Falah, Kanigoro, Blitar, pendidikan Islam'
-where id = (select id from site_settings limit 1);
+CREATE TRIGGER update_academic_pages_modtime
+    BEFORE UPDATE ON academic_pages
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
--- Seed data sosial media
-insert into social_media_links (platform, url, display_order)
-values 
-  ('facebook', 'https://facebook.com/misalfalah', 1),
-  ('instagram', 'https://instagram.com/misalfalah', 2),
-  ('youtube', 'https://youtube.com/@misalfalah', 3);
-
--- Seed extracurriculars
-insert into extracurriculars (name, description, icon, schedule, coachname, displayorder)
-values 
-  ('Pramuka', 'Melatih kepemimpinan dan kemandirian siswa', 'Tent', 'Jumat, 14:00-16:00', 'Ustadz Ahmad', 1),
-  ('Tahfidz', 'Menghafal Al-Quran dengan metode tilawati', 'BookMarked', 'Senin-Kamis, 07:00-08:00', 'Ustadzah Fatimah', 2),
-  ('Seni Kaligrafi', 'Mengasah kreativitas seni kaligrafi Arab', 'Paintbrush', 'Rabu, 15:00-16:30', 'Ustadz Bambang', 3),
-  ('Futsal', 'Olahraga futsal untuk kesehatan dan teamwork', 'Trophy', 'Sabtu, 08:00-10:00', 'Coach Dedi', 4)
-on conflict do nothing;
-
--- Seed character programs
-insert into character_programs (name, description, icon, frequency, displayorder)
-values 
-  ('Sholat Dhuha Berjamaah', 'Pembiasaan sholat dhuha setiap pagi', 'Sunrise', 'Setiap Hari', 1),
-  ('Infaq Jumat', 'Berbagi kepada sesama setiap Jumat', 'Heart', 'Setiap Jumat', 2),
-  ('Tahsin & Tartil', 'Pembelajaran baca Al-Quran yang benar', 'BookOpen', '3x Seminggu', 3),
-  ('Budaya 5S', 'Senyum, Salam, Sapa, Sopan, Santun', 'SmilePlus', 'Setiap Hari', 4)
-on conflict do nothing;
-
--- Seed site banners
-insert into site_banners (title, description, buttontext, buttonlink, placement, displayorder)
-values 
-  ('PPDB 2026 Dibuka!', 'Daftarkan putra-putri Anda sekarang. Kuota terbatas!', 'Daftar Sekarang', '/ppdb', 'home', 1)
-on conflict do nothing;
-
--- Seed page heroes
-insert into page_heroes (pageslug, title, subtitle, imageurl)
-values 
-  ('kelulusan', 'Cek Kelulusan', 'Informasi kelulusan siswa tahun ajaran 2025/2026', 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1920'),
-  ('kontak', 'Hubungi Kami', 'Kami siap melayani pertanyaan Anda', 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1920')
-on conflict (pageslug) do update set
-  title = excluded.title,
-  subtitle = excluded.subtitle,
-  imageurl = excluded.imageurl;
-
--- Seed data menu navigasi (updated)
-insert into navigation_menu (id, label, href, parent_id, display_order, is_active, icon, created_at, updated_at)
-values
-  ('00000000-0000-0000-0000-000000000001', 'Beranda', '/', null, 1, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('00000000-0000-0000-0000-000000000002', 'Profil', null, null, 5, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('00000000-0000-0000-0000-000000000003', 'Akademik', null, null, 9, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('00000000-0000-0000-0000-000000000004', 'Informasi', null, null, 13, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('03aec87a-0649-4e79-8fee-3453e80bb417', 'RDM', 'https://rdm.mialfalahkanigoroblitar.sch.id/', '00000000-0000-0000-0000-000000000004', 19, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('1446cafd-68aa-4b5a-a1d8-0c770de41ae5', 'Sambutan Kepala Madrasah', '/sambutan', '00000000-0000-0000-0000-000000000002', 2, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 11:16:47.550436+00'),
-  ('29437ea6-d220-4881-8451-867676f700fc', 'Akademik', '/akademik', '00000000-0000-0000-0000-000000000003', 3, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('3440477f-21c4-493d-a526-80a2c3b9f31a', 'Guru', '/guru', '00000000-0000-0000-0000-000000000002', 17, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('41b2531a-a7da-40a2-98fc-d46a6895468b', 'Prestasi', '/prestasi', '00000000-0000-0000-0000-000000000004', 15, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('5608b20b-471b-4915-982d-08c99df704a1', 'CBTM', 'https://misalfalah.cbtm.my.id/login', '00000000-0000-0000-0000-000000000004', 20, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('5f75bcaf-9f08-41e2-90c1-96d91b1cfefb', 'PPDB', '/ppdb', '00000000-0000-0000-0000-000000000003', 11, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('720b1c5f-2fb2-498e-8c1d-53f898696cab', 'Profil Madrasah', '/profil', '00000000-0000-0000-0000-000000000002', 6, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('7a9eda66-7822-44dd-b3f5-308b1a5ed9b4', 'Berita', '/berita', '00000000-0000-0000-0000-000000000004', 4, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('9cc27794-48c6-4d66-ab65-e2ab495d26d4', 'Kesiswaan', '/kesiswaan', '00000000-0000-0000-0000-000000000003', 7, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('aedb3d6b-d447-46b2-acc4-9a5d9daafae9', 'Kontak Madrasah', '/kontak', '00000000-0000-0000-0000-000000000002', 16, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('b8708c00-063e-4d47-9203-ca968163a1aa', 'Visi Misi Madrasah', '/visimisi', '00000000-0000-0000-0000-000000000002', 14, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 11:16:57.019408+00'),
-  ('e6223482-c23f-4d09-b630-a563e86d5b2e', 'Sejarah Madrasah', '/sejarah', '00000000-0000-0000-0000-000000000002', 10, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 11:17:24.595945+00'),
-  ('e688ba91-400a-4f06-b8e7-fc3b50403767', 'Kelulusan', '/kelulusan', '00000000-0000-0000-0000-000000000004', 8, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('ef5b7248-c76d-4d7d-83e2-cab07537bee4', 'Unduhan', '/download', '00000000-0000-0000-0000-000000000004', 12, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00'),
-  ('f627cd99-d861-44c6-bf06-6fba3d921dd9', 'E learning', 'https://elearning.mialfalahkanigoroblitar.sch.id/', '00000000-0000-0000-0000-000000000004', 18, true, null, '2026-02-04 10:48:04.282507+00', '2026-02-04 10:48:04.282507+00');
-
--- Seed data footer links
-insert into footer_quick_links (label, href, display_order)
-values 
-  ('Profil Sekolah', '/profil', 1),
-  ('Info PPDB', '/ppdb', 2),
-  ('Berita & Kegiatan', '/berita', 3),
-  ('Kurikulum', '/akademik', 4),
-  ('Hubungi Kami', '/kontak', 5);
-
-insert into headmaster_greeting (
-  title,
-  subtitle,
-  content_text,
-  headmaster_name,
-  headmaster_title,
-  photo_url
-)
-values (
-  'Sambutan Kepala Madrasah',
-  'Mewujudkan Generasi Islami yang Kompetitif',
-  'Assalamu''alaikum Warahmatullahi Wabarakatuh. Puji syukur kita panjatkan ke hadirat Allah SWT...',
-  'Drs. H. Ahmad Fauzi, M.Pd',
-  'Kepala Madrasah',
-  'https://picsum.photos/id/1005/600/800'
+CREATE TABLE academic_sections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    page_id UUID NOT NULL REFERENCES academic_pages(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    body TEXT,
+    display_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed history page (Sejarah Madrasah)
-insert into history_page (
-  id,
-  title,
-  subtitle,
-  content_html,
-  content_text
-)
-values (
-  '00000000-0000-0000-0000-000000000010',
-  'Sejarah Madrasah',
-  'Perjalanan MI Al-Falah Kanigoro dari masa ke masa.',
-  '<p>MI Al-Falah Kanigoro berkembang sebagai madrasah ibtidaiyah yang menekankan pendidikan karakter dan nilai-nilai Islam.</p>',
-  'MI Al-Falah Kanigoro berkembang sebagai madrasah ibtidaiyah yang menekankan pendidikan karakter dan nilai-nilai Islam.'
-)
-on conflict (id) do update set
-  title = excluded.title,
-  subtitle = excluded.subtitle,
-  content_html = excluded.content_html,
-  content_text = excluded.content_text;
+CREATE INDEX idx_academic_sections_page ON academic_sections(page_id, display_order);
 
-insert into history_timeline_items (
-  history_page_id,
-  year,
-  title,
-  description_text,
-  display_order
-)
-values
-  ('00000000-0000-0000-0000-000000000010', '1995', 'Awal Berdiri', 'Madrasah mulai dirintis oleh masyarakat sekitar.', 1)
-on conflict do nothing;
+CREATE TRIGGER update_academic_sections_modtime
+    BEFORE UPDATE ON academic_sections
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
--- Seed vision & mission page (Visi dan Misi)
-insert into vision_mission_page (
-  id,
-  vision_text,
-  mission_text,
-  is_active
+-- Seed Akademik
+WITH new_academic AS (
+    INSERT INTO academic_pages (title, subtitle, content, is_active)
+    VALUES (
+        'Akademik',
+        'Integrasi kurikulum nasional dan nilai keislaman.',
+        'Halaman akademik berisi gambaran kurikulum, metode pembelajaran, dan program unggulan.',
+        TRUE
+    )
+    RETURNING id
 )
-values (
-  '00000000-0000-0000-0000-000000000020',
-  'Terwujudnya peserta didik yang beriman, berakhlak mulia, cerdas, dan berdaya saing.',
-  'Menanamkan nilai-nilai keislaman dan karakter. Meningkatkan kualitas pembelajaran yang aktif dan kreatif. Mendorong prestasi akademik dan non-akademik.',
-  true
-)
-on conflict (id) do update set
-  vision_text = excluded.vision_text,
-  mission_text = excluded.mission_text,
-  is_active = excluded.is_active;
+INSERT INTO academic_sections (page_id, title, body, display_order)
+SELECT id, 'Kurikulum Terintegrasi', 'Kurikulum nasional dipadukan dengan kurikulum madrasah dan penguatan karakter.', 1 FROM new_academic
+UNION ALL
+SELECT id, 'Program Unggulan', 'Tahfidz, literasi, sains, dan penguatan bahasa.', 2 FROM new_academic
+UNION ALL
+SELECT id, 'Metode Pembelajaran', 'Project based learning, kolaboratif, dan pembiasaan adab.', 3 FROM new_academic
+UNION ALL
+SELECT id, 'Fasilitas Akademik', 'Perpustakaan, laboratorium, dan ruang multimedia.', 4 FROM new_academic;
 
--- Seed profile page (Profil Madrasah)
-insert into profile_page (
-  id,
-  "descriptionHtml",
-  "descriptionText",
-  "videoUrl",
-  "schoolName",
-  npsn,
-  "schoolAddress",
-  village,
-  district,
-  city,
-  province,
-  "schoolStatus",
-  "educationForm",
-  "educationLevel"
+-- Dummy media untuk akademik (sementara pakai URL Google, produksi pakai Cloudinary)
+WITH academic_target AS (
+    SELECT id FROM academic_pages ORDER BY created_at DESC LIMIT 1
 )
-values (
-  'main',
-  '<p><strong>MI AL-FALAH KANIGORO</strong> adalah madrasah ibtidaiyah swasta yang berlokasi di Kecamatan Kanigoro, Kabupaten Blitar, Provinsi Jawa Timur. Dengan NPSN <strong>60714626</strong>, kami berkomitmen menghadirkan layanan pendidikan dasar Islam yang berkualitas, berakar pada nilai-nilai keislaman, dan adaptif terhadap perkembangan zaman.</p><p>Madrasah ini berada di <strong>JL. IRIAN GANG PONDOK JAJAR KANIGORO</strong> dan melayani peserta didik jenjang <strong>DIKDAS</strong> (Bentuk Pendidikan: <strong>MI</strong>). Kami terus mendorong budaya belajar yang berakhlak, disiplin, dan berprestasi.</p>',
-  'MI AL-FALAH KANIGORO adalah madrasah ibtidaiyah swasta yang berlokasi di Kecamatan Kanigoro, Kabupaten Blitar, Provinsi Jawa Timur. Dengan NPSN 60714626, kami berkomitmen menghadirkan layanan pendidikan dasar Islam yang berkualitas, berakar pada nilai-nilai keislaman, dan adaptif terhadap perkembangan zaman. Madrasah ini berada di JL. IRIAN GANG PONDOK JAJAR KANIGORO dan melayani peserta didik jenjang DIKDAS (Bentuk Pendidikan: MI). Kami terus mendorong budaya belajar yang berakhlak, disiplin, dan berprestasi.',
-  null,
-  'MI AL-FALAH KANIGORO',
-  '60714626',
-  'JL. IRIAN GANG PONDOK JAJAR KANIGORO',
-  'KANIGORO',
-  'KEC. KANIGORO',
-  'KAB. BLITAR',
-  'PROV. JAWA TIMUR',
-  'SWASTA',
-  'MI',
-  'DIKDAS'
-)
-on conflict (id) do update set
-  "descriptionHtml" = excluded."descriptionHtml",
-  "descriptionText" = excluded."descriptionText",
-  "videoUrl" = excluded."videoUrl",
-  "schoolName" = excluded."schoolName",
-  npsn = excluded.npsn,
-  "schoolAddress" = excluded."schoolAddress",
-  village = excluded.village,
-  district = excluded.district,
-  city = excluded.city,
-  province = excluded.province,
-  "schoolStatus" = excluded."schoolStatus",
-  "educationForm" = excluded."educationForm",
-  "educationLevel" = excluded."educationLevel";
+INSERT INTO media_items (entity_type, entity_id, media_type, media_url, caption, is_main, display_order)
+SELECT 'academic', id, 'image', 'https://lh3.googleusercontent.com/d/YOUR_GOOGLE_IMAGE_ID_ACADEMIC_1', 'Kegiatan Belajar', true, 0 FROM academic_target
+UNION ALL
+SELECT 'academic', id, 'image', 'https://lh3.googleusercontent.com/d/YOUR_GOOGLE_IMAGE_ID_ACADEMIC_2', 'Ruang Kelas', false, 1 FROM academic_target
+UNION ALL
+SELECT 'academic', id, 'image', 'https://lh3.googleusercontent.com/d/YOUR_GOOGLE_IMAGE_ID_ACADEMIC_3', 'Laboratorium', false, 2 FROM academic_target;
 
--- Seed contact page (Kontak Madrasah)
-insert into contact_page (
-  id,
-  address,
-  phone,
-  email,
-  "whatsappList",
-  "adminWhatsappId",
-  "mapEmbedHtml"
-)
-values (
-  'main',
-  'JL. IRIAN GANG PONDOK JAJAR KANIGORO, KEC. KANIGORO, KAB. BLITAR, JAWA TIMUR',
-  '(0342) 123456',
-  'info@misalfalah.sch.id',
-  $$[
-    {"id":"wa-1","name":"Admin PPDB","url":"https://wa.me/6281234567890"},
-    {"id":"wa-2","name":"Admin Humas","url":"https://wa.me/6281234567891"}
-  ]$$::jsonb,
-  'wa-1',
-  '<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3949.7337151461493!2d112.2221!3d-8.12857!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e78eb3897ca0edb%3A0x7e5b26d2a3d88ee9!2sMIS%20Al-Falah%20Kanigoro!5e0!3m2!1sid!2sid!4v1770228442341!5m2!1sid!2sid" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>'
-)
-on conflict (id) do update set
-  address = excluded.address,
-  phone = excluded.phone,
-  email = excluded.email,
-  "whatsappList" = excluded."whatsappList",
-  "adminWhatsappId" = excluded."adminWhatsappId",
-  "mapEmbedHtml" = excluded."mapEmbedHtml";
+-- ============================================
+-- 11. MODULE: PPDB (REGISTRATIONS + FILES)
+-- ============================================
+DROP TABLE IF EXISTS ppdb_files CASCADE;
+DROP TABLE IF EXISTS ppdb_registrations CASCADE;
+DROP TABLE IF EXISTS ppdb_notifications CASCADE;
+DROP TABLE IF EXISTS ppdb_waves CASCADE;
 
--- Seed content posts (Publikasi)
-with upsert as (
-  insert into content_posts (
-    type,
-    title,
-    slug,
-    excerpt,
-    "contentHtml",
-    "contentText",
-    "coverUrl",
-    category,
-    "publishedAt",
-    "isPublished",
-    meta
-  )
-  values (
-    'news'::content_type,
-    'Kegiatan Jumat Berkah',
-    'kegiatan-jumat-berkah',
-    'Siswa belajar berbagi melalui kegiatan Jumat Berkah di lingkungan madrasah.',
-    $$<p>Kegiatan Jumat Berkah diikuti seluruh siswa dengan agenda berbagi dan doa bersama.</p>$$,
-    'Kegiatan Jumat Berkah diikuti seluruh siswa dengan agenda berbagi dan doa bersama.',
-    'https://picsum.photos/seed/berita-cover/1200/600',
-    'Kegiatan',
-    now(),
-    true,
-    '{"tags":["kegiatan","sosial"]}'::jsonb
-  )
-  on conflict (slug) do update set
-    type = excluded.type,
-    title = excluded.title,
-    excerpt = excluded.excerpt,
-    "contentHtml" = excluded."contentHtml",
-    "contentText" = excluded."contentText",
-    "coverUrl" = excluded."coverUrl",
-    category = excluded.category,
-    "publishedAt" = excluded."publishedAt",
-    "isPublished" = excluded."isPublished",
-    meta = excluded.meta
-  returning id
-)
-insert into content_media ("postId", "mediaType", url, caption, "displayOrder", "isActive")
-select id, 'image'::media_type, 'https://picsum.photos/seed/berita-1/1200/800', 'Dokumentasi 1', 1, true
-from upsert
-where not exists (
-  select 1 from content_media where "postId" = upsert.id and url = 'https://picsum.photos/seed/berita-1/1200/800'
-)
-union all
-select id, 'image'::media_type, 'https://picsum.photos/seed/berita-2/1200/800', 'Dokumentasi 2', 2, true
-from upsert
-where not exists (
-  select 1 from content_media where "postId" = upsert.id and url = 'https://picsum.photos/seed/berita-2/1200/800'
+-- Enum status PPDB
+DO $$ BEGIN
+    CREATE TYPE ppdb_status AS ENUM ('VERIFIKASI', 'BERKAS_VALID', 'DITERIMA', 'DITOLAK');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Gelombang PPDB
+CREATE TABLE ppdb_waves (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    quota INTEGER,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-with upsert as (
-  insert into content_posts (
-    type,
-    title,
-    slug,
-    excerpt,
-    "contentHtml",
-    "contentText",
-    "coverUrl",
-    category,
-    "publishedAt",
-    "isPublished"
-  )
-  values (
-    'announcement'::content_type,
-    'Pengumuman PPDB 2026',
-    'pengumuman-ppdb-2026',
-    'Jadwal dan berkas PPDB tahun ajaran 2026 sudah tersedia.',
-    $$<p>Silakan unduh dokumen pengumuman dan lengkapi berkas sesuai jadwal.</p>$$,
-    'Silakan unduh dokumen pengumuman dan lengkapi berkas sesuai jadwal.',
-    'https://picsum.photos/seed/pengumuman-cover/1200/600',
-    'PPDB',
-    now(),
-    true
-  )
-  on conflict (slug) do update set
-    type = excluded.type,
-    title = excluded.title,
-    excerpt = excluded.excerpt,
-    "contentHtml" = excluded."contentHtml",
-    "contentText" = excluded."contentText",
-    "coverUrl" = excluded."coverUrl",
-    category = excluded.category,
-    "publishedAt" = excluded."publishedAt",
-    "isPublished" = excluded."isPublished"
-  returning id
-)
-insert into content_media ("postId", "mediaType", url, caption, "displayOrder", "isActive")
-select id, 'file'::media_type, 'https://example.com/pengumuman-ppdb-2026.pdf', 'Pengumuman PPDB 2026 (PDF)', 1, true
-from upsert
-where not exists (
-  select 1 from content_media where "postId" = upsert.id and url = 'https://example.com/pengumuman-ppdb-2026.pdf'
+CREATE TABLE ppdb_registrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "namaLengkap" TEXT NOT NULL,
+    nik TEXT NOT NULL,
+    nisn TEXT NOT NULL,
+    wave_id UUID REFERENCES ppdb_waves(id) ON DELETE SET NULL,
+    "tempatLahir" TEXT NOT NULL,
+    "tanggalLahir" DATE NOT NULL,
+    "jenisKelamin" TEXT NOT NULL,
+    alamat TEXT NOT NULL,
+    "namaAyah" TEXT NOT NULL,
+    "pekerjaanAyah" TEXT,
+    "namaIbu" TEXT NOT NULL,
+    "pekerjaanIbu" TEXT,
+    "noHp" TEXT NOT NULL,
+    status ppdb_status NOT NULL DEFAULT 'VERIFIKASI',
+    pesan TEXT,
+    "tanggalDaftar" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-with upsert as (
-  insert into content_posts (
-    type,
-    title,
-    slug,
-    excerpt,
-    "contentHtml",
-    "contentText",
-    "coverUrl",
-    category,
-    "publishedAt",
-    "isPublished"
-  )
-  values (
-    'gallery'::content_type,
-    'Galeri Lomba Pramuka',
-    'galeri-lomba-pramuka',
-    'Dokumentasi kegiatan lomba pramuka tingkat kecamatan.',
-    $$<p>Galeri ini berisi dokumentasi kegiatan lomba pramuka di tingkat kecamatan.</p>$$,
-    'Galeri ini berisi dokumentasi kegiatan lomba pramuka di tingkat kecamatan.',
-    'https://picsum.photos/seed/galeri-cover/1200/600',
-    'Galeri',
-    now(),
-    true
-  )
-  on conflict (slug) do update set
-    type = excluded.type,
-    title = excluded.title,
-    excerpt = excluded.excerpt,
-    "contentHtml" = excluded."contentHtml",
-    "contentText" = excluded."contentText",
-    "coverUrl" = excluded."coverUrl",
-    category = excluded.category,
-    "publishedAt" = excluded."publishedAt",
-    "isPublished" = excluded."isPublished"
-  returning id
-)
-insert into content_media ("postId", "mediaType", url, caption, "displayOrder", "isActive")
-select id, 'image'::media_type, 'https://picsum.photos/seed/galeri-1/1200/800', 'Dokumentasi 1', 1, true
-from upsert
-where not exists (
-  select 1 from content_media where "postId" = upsert.id and url = 'https://picsum.photos/seed/galeri-1/1200/800'
-)
-union all
-select id, 'image'::media_type, 'https://picsum.photos/seed/galeri-2/1200/800', 'Dokumentasi 2', 2, true
-from upsert
-where not exists (
-  select 1 from content_media where "postId" = upsert.id and url = 'https://picsum.photos/seed/galeri-2/1200/800'
+-- Unik untuk NISN (abaikan NULL)
+CREATE UNIQUE INDEX IF NOT EXISTS ppdb_registrations_nisn_unique
+ON ppdb_registrations (nisn)
+WHERE nisn IS NOT NULL;
+
+-- Pastikan hanya 1 gelombang aktif
+CREATE UNIQUE INDEX IF NOT EXISTS ppdb_waves_single_active
+ON ppdb_waves (is_active)
+WHERE is_active = true;
+
+CREATE INDEX idx_ppdb_registrations_wave_id ON ppdb_registrations(wave_id);
+
+-- Berkas PPDB (semua berbasis gambar via Cloudinary)
+CREATE TABLE ppdb_files (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    registration_id UUID NOT NULL REFERENCES ppdb_registrations(id) ON DELETE CASCADE,
+    file_type TEXT NOT NULL CHECK (
+        file_type IN (
+            'kk',
+            'akta_kelahiran',
+            'ktp_wali',
+            'pas_foto',
+            'nisn',
+            'ijazah_rapor'
+        )
+    ),
+    file_url TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-with upsert as (
-  insert into content_posts (
-    type,
-    title,
-    slug,
-    excerpt,
-    "contentHtml",
-    "contentText",
-    category,
-    "publishedAt",
-    "isPublished"
-  )
-  values (
-    'download'::content_type,
-    'Formulir Daftar Ulang',
-    'formulir-daftar-ulang',
-    'Formulir daftar ulang peserta didik baru.',
-    $$<p>Silakan unduh formulir daftar ulang melalui tautan berikut.</p>$$,
-    'Silakan unduh formulir daftar ulang melalui tautan berikut.',
-    'Dokumen',
-    now(),
-    true
-  )
-  on conflict (slug) do update set
-    type = excluded.type,
-    title = excluded.title,
-    excerpt = excluded.excerpt,
-    "contentHtml" = excluded."contentHtml",
-    "contentText" = excluded."contentText",
-    category = excluded.category,
-    "publishedAt" = excluded."publishedAt",
-    "isPublished" = excluded."isPublished"
-  returning id
-)
-insert into content_media ("postId", "mediaType", url, caption, "displayOrder", "isActive")
-select id, 'file'::media_type, 'https://example.com/formulir-daftar-ulang.pdf', 'Formulir Daftar Ulang (PDF)', 1, true
-from upsert
-where not exists (
-  select 1 from content_media where "postId" = upsert.id and url = 'https://example.com/formulir-daftar-ulang.pdf'
+CREATE INDEX idx_ppdb_files_registration ON ppdb_files (registration_id);
+CREATE INDEX idx_ppdb_files_type ON ppdb_files (file_type);
+
+-- Notifikasi PPDB
+CREATE TABLE ppdb_notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    registration_id UUID REFERENCES ppdb_registrations(id) ON DELETE SET NULL,
+    wave_id UUID REFERENCES ppdb_waves(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed achievements (Prestasi)
-with upsert as (
-  insert into achievements (
-    title,
-    slug,
-    excerpt,
-    "contentHtml",
-    "contentText",
-    "coverUrl",
-    category,
-    "achievedAt",
-    "isPublished",
-    meta
-  )
-  values (
-    'Juara 1 Olimpiade Matematika',
-    'juara-1-olimpiade-matematika',
-    'Prestasi siswa kelas 5 pada olimpiade matematika tingkat kabupaten.',
-    $$<p>Siswa kelas 5 meraih Juara 1 Olimpiade Matematika tingkat kabupaten.</p>$$,
-    'Siswa kelas 5 meraih Juara 1 Olimpiade Matematika tingkat kabupaten.',
-    'https://picsum.photos/seed/prestasi-cover/1200/600',
-    'Akademik',
-    '2025-11-12',
-    true,
-    '{"level":"Kabupaten","peserta":"Tim Kelas 5"}'::jsonb
-  )
-  on conflict (slug) do update set
-    title = excluded.title,
-    excerpt = excluded.excerpt,
-    "contentHtml" = excluded."contentHtml",
-    "contentText" = excluded."contentText",
-    "coverUrl" = excluded."coverUrl",
-    category = excluded.category,
-    "achievedAt" = excluded."achievedAt",
-    "isPublished" = excluded."isPublished",
-    meta = excluded.meta
-  returning id
-)
-insert into achievement_media ("achievementId", "mediaType", url, caption, "displayOrder", "isActive")
-select id, 'image'::media_type, 'https://picsum.photos/seed/prestasi-1/1200/800', 'Dokumentasi Prestasi', 1, true
-from upsert
-where not exists (
-  select 1 from achievement_media where "achievementId" = upsert.id and url = 'https://picsum.photos/seed/prestasi-1/1200/800'
+CREATE INDEX idx_ppdb_notifications_reg ON ppdb_notifications(registration_id);
+CREATE INDEX idx_ppdb_notifications_wave ON ppdb_notifications(wave_id);
+
+-- RLS: anon bisa insert berkas
+ALTER TABLE ppdb_files ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS anon_insert_ppdb_files ON ppdb_files;
+CREATE POLICY anon_insert_ppdb_files
+ON ppdb_files
+FOR INSERT
+TO anon
+WITH CHECK (true);
+
+-- ============================================
+-- 12. MODULE: WEB PUSH SUBSCRIPTIONS
+-- ============================================
+DROP TABLE IF EXISTS push_subscriptions CASCADE;
+CREATE TABLE push_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    registration_id UUID NOT NULL REFERENCES ppdb_registrations(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_push_subscriptions_reg ON push_subscriptions (registration_id);
+
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS anon_insert_push_subscriptions ON push_subscriptions;
+CREATE POLICY anon_insert_push_subscriptions
+ON push_subscriptions
+FOR INSERT
+TO anon
+WITH CHECK (true);

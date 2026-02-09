@@ -51,32 +51,33 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
             { label: 'Sejarah', href: '/admin/sejarah', icon: History },
             { label: 'Visi Misi', href: '/admin/visi-misi', icon: Target },
             { label: 'Kontak', href: '/admin/kontak', icon: MapPin },
-            { label: 'Akademik', href: '/admin/akademik', icon: BookOpen },
-            { label: 'Kesiswaan', href: '/admin/kesiswaan', icon: Users },
         ],
     },
     {
-        label: 'Konten',
-        icon: FileText,
+        label: 'Akademik',
+        icon: BookOpen,
         children: [
-            { label: 'Hero Slides', href: '/admin/kelola-hero', icon: ImagePlus },
-            { label: 'Highlights', href: '/admin/kelola-highlights', icon: Sparkles },
-            { label: 'Banner CTA', href: '/admin/kelola-banner', icon: PanelsTopLeft },
-            { label: 'Hero Pages', href: '/admin/kelola-hero-pages', icon: ImagePlus },
-            { label: 'Publikasi', href: '/admin/publikasi', icon: Newspaper },
-            { label: 'Berita', href: '/admin/berita', icon: Newspaper },
-            { label: 'Prestasi', href: '/admin/prestasi', icon: Newspaper },
+            { label: 'Akademik', href: '/admin/akademik', icon: BookOpen },
+            { label: 'Kesiswaan', href: '/admin/kesiswaan', icon: Users },
+            { label: 'Guru', href: '/admin/guru', icon: Users },
         ],
     },
-    { label: 'Guru', href: '/admin/guru', icon: Users },
-    { label: 'Kegiatan', href: '/admin/kelola-kegiatan', icon: ImagePlus },
-    { label: 'Download', href: '/admin/kelola-download', icon: Download },
-    { label: 'Kelulusan', href: '/admin/kelulusan', icon: GraduationCap },
+    {
+        label: 'Informasi',
+        icon: FileText,
+        children: [
+            { label: 'Berita', href: '/admin/berita', icon: Newspaper },
+            { label: 'Publikasi', href: '/admin/publikasi', icon: Newspaper },
+            { label: 'Galeri', href: '/admin/galeri', icon: ImagePlus },
+            { label: 'Prestasi', href: '/admin/prestasi', icon: Newspaper },
+            { label: 'Kelulusan', href: '/admin/kelulusan', icon: GraduationCap },
+            { label: 'Download', href: '/admin/download', icon: Download },
+        ],
+    },
     { label: 'PPDB', href: '/admin/ppdb', icon: ClipboardList },
     { label: 'Kelola Header', href: '/admin/kelola-header', icon: LayoutPanelTop },
     { label: 'Kelola Footer', href: '/admin/kelola-footer', icon: LayoutList },
     { label: 'Sosial Media', href: '/admin/sosial-media', icon: Share2 },
-    { label: 'Pengaturan', href: '/admin/pengaturan', icon: Settings },
 ];
 
 type StoredAdminUser = {
@@ -170,28 +171,36 @@ const SidebarAdmin: React.FC = () => {
     }, [user]);
 
     const showKontrolAkun = user?.role === 'superadmin';
+    const showFileManager = user?.role === 'superadmin';
 
     const isGroupActive = (item: SidebarItem) =>
         item.children?.some((child) => child.href === pathname) ?? false;
 
     const SidebarContent = (
-        <div className="flex h-full flex-col gap-8 p-6 overflow-y-auto admin-scrollbar">
-            <div>
+        <div className="flex h-full flex-col gap-8 p-6 pb-8 overflow-y-auto admin-scrollbar bg-gradient-to-b from-white/95 to-white dark:from-[#0B0F0C] dark:to-[#0B0F0C]">
+            <div className="flex items-center justify-between gap-3">
                 <Link
-                    href="/admin/profile"
-                    className="flex items-center gap-4 rounded-2xl border border-emerald-900/10 bg-white/70 px-4 py-4 text-gray-800 shadow-sm transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                    href="/admin/dashboard"
+                    className="inline-flex items-center gap-3 rounded-2xl bg-emerald-600 px-3 py-2 text-white shadow-lg shadow-emerald-600/30"
                 >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200">
-                        <UserRound size={24} />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-white">
+                        <PanelsTopLeft size={20} />
                     </div>
-                    <div>
-                        <p className="text-xs uppercase tracking-[0.3em] text-emerald-600 dark:text-emerald-200">{displayRole}</p>
-                        <p className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">{displayName}</p>
+                    <div className="leading-tight">
+                        <p className="text-[10px] uppercase tracking-[0.25em] opacity-80">{displayRole}</p>
+                        <p className="text-sm font-bold">{displayName}</p>
                     </div>
                 </Link>
+                <button
+                    onClick={toggleTheme}
+                    className="h-10 w-10 rounded-xl border border-emerald-900/10 bg-white text-emerald-700 shadow-sm transition hover:border-emerald-500 hover:text-emerald-600 dark:border-white/10 dark:bg-white/10 dark:text-white"
+                    aria-label="Toggle theme"
+                >
+                    {isDark ? <Sun size={18} /> : <Moon size={18} />}
+                </button>
             </div>
 
-            <nav className="flex-1 space-y-2">
+            <nav className="flex-1 space-y-3">
                 {SIDEBAR_ITEMS.map((item) => {
                     const active = item.href ? pathname === item.href : isGroupActive(item);
                     const Icon = item.icon;
@@ -207,9 +216,9 @@ const SidebarAdmin: React.FC = () => {
                                             [item.label]: !isOpen,
                                         }))
                                     }
-                                    className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition ${active
-                                            ? 'bg-emerald-500/20 text-emerald-900 dark:text-white'
-                                            : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 dark:text-emerald-100/80 dark:hover:bg-white/5 dark:hover:text-white'
+                                    className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-semibold transition ${active
+                                        ? 'bg-emerald-600/15 text-emerald-800 ring-1 ring-emerald-200 dark:bg-white/5 dark:text-white dark:ring-white/10'
+                                        : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 dark:text-emerald-100/80 dark:hover:bg-white/5 dark:hover:text-white'
                                         }`}
                                 >
                                     <span className="flex items-center gap-3">
@@ -227,9 +236,9 @@ const SidebarAdmin: React.FC = () => {
                                                 <Link
                                                     key={child.href}
                                                     href={child.href}
-                                                    className={`flex items-center gap-3 rounded-xl px-4 py-2 text-xs font-medium transition ${childActive
-                                                            ? 'bg-emerald-500/20 text-emerald-900 dark:text-white'
-                                                            : 'text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 dark:text-emerald-100/70 dark:hover:bg-white/5 dark:hover:text-white'
+                                                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold transition ${childActive
+                                                        ? 'bg-emerald-600/15 text-emerald-900 ring-1 ring-emerald-200 dark:text-white dark:ring-white/10'
+                                                        : 'text-gray-600 hover:bg-emerald-50 hover:text-emerald-900 dark:text-emerald-100/70 dark:hover:bg-white/5 dark:hover:text-white'
                                                         }`}
                                                 >
                                                     {ChildIcon ? <ChildIcon size={14} /> : null}
@@ -247,9 +256,9 @@ const SidebarAdmin: React.FC = () => {
                         <Link
                             key={item.href}
                             href={item.href as string}
-                            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${active
-                                    ? 'bg-emerald-500/20 text-emerald-900 dark:text-white'
-                                    : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 dark:text-emerald-100/80 dark:hover:bg-white/5 dark:hover:text-white'
+                            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${active
+                                ? 'bg-emerald-600/15 text-emerald-900 ring-1 ring-emerald-200 dark:text-white dark:ring-white/10'
+                                : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 dark:text-emerald-100/80 dark:hover:bg-white/5 dark:hover:text-white'
                                 }`}
                         >
                             <Icon size={18} />
@@ -258,12 +267,25 @@ const SidebarAdmin: React.FC = () => {
                     );
                 })}
 
+                {showFileManager && (
+                    <Link
+                        href="/admin/pengaturan"
+                        className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${pathname === '/admin/pengaturan'
+                            ? 'bg-emerald-600/15 text-emerald-900 ring-1 ring-emerald-200 dark:text-white dark:ring-white/10'
+                            : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 dark:text-emerald-100/80 dark:hover:bg-white/5 dark:hover:text-white'
+                            }`}
+                    >
+                        <Settings size={18} />
+                        File Manager
+                    </Link>
+                )}
+
                 {showKontrolAkun && (
                     <Link
                         href="/admin/kontrolAkun"
                         className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${pathname === '/admin/kontrolAkun'
-                                ? 'bg-amber-300/30 text-amber-900 dark:text-white'
-                                : 'text-amber-700 hover:bg-amber-50 hover:text-amber-900 dark:text-amber-100/90 dark:hover:bg-white/5 dark:hover:text-white'
+                            ? 'bg-amber-300/30 text-amber-900 dark:text-white'
+                            : 'text-amber-700 hover:bg-amber-50 hover:text-amber-900 dark:text-amber-100/90 dark:hover:bg-white/5 dark:hover:text-white'
                             }`}
                     >
                         <Shield size={18} />
@@ -274,15 +296,8 @@ const SidebarAdmin: React.FC = () => {
 
             <div className="space-y-3">
                 <button
-                    onClick={toggleTheme}
-                    className="flex w-full items-center justify-between rounded-xl border border-emerald-900/10 bg-white/70 px-4 py-3 text-sm font-medium text-gray-800 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-white"
-                >
-                    <span>Mode Gelap</span>
-                    {isDark ? <Sun size={18} /> : <Moon size={18} />}
-                </button>
-                <button
                     onClick={handleLogout}
-                    className="flex w-full items-center justify-between rounded-xl border border-emerald-900/10 bg-white/70 px-4 py-3 text-sm font-medium text-gray-800 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-white"
+                    className="flex w-full items-center justify-between rounded-xl border border-red-100 bg-white/80 px-4 py-3 text-sm font-semibold text-red-600 shadow-sm hover:border-red-200 hover:bg-red-50 dark:border-red-400/30 dark:bg-white/5 dark:text-red-200"
                 >
                     <span>Logout</span>
                     <LogOut size={18} />
@@ -293,7 +308,7 @@ const SidebarAdmin: React.FC = () => {
 
     return (
         <>
-            <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-emerald-900/10 bg-white/90 text-gray-900 shadow-lg backdrop-blur lg:flex dark:border-white/10 dark:bg-[#0B0F0C] dark:text-white">
+            <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-emerald-900/10 bg-white/95 text-gray-900 shadow-lg backdrop-blur lg:flex dark:border-white/10 dark:bg-[#0B0F0C] dark:text-white">
                 {SidebarContent}
             </aside>
 

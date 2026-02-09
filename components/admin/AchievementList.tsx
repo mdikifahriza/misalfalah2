@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Plus, Calendar, ChevronRight, Pin, Award } from 'lucide-react';
+import { Search, Plus, Calendar, ChevronRight, Pin, Award } from 'lucide-react';
 import type { Achievement } from '@/lib/types';
 
 interface AchievementListProps {
     achievements: Achievement[];
-    selectedId: number | null;
-    onSelect: (id: number) => void;
+    selectedId: string | null;
+    onSelect: (id: string) => void;
     onAdd: () => void;
     loading: boolean;
 }
@@ -91,10 +91,10 @@ const AchievementList: React.FC<AchievementListProps> = ({
                                     <div className="flex items-center gap-2 text-[11px] text-gray-400">
                                         <Calendar size={12} />
                                         <span>{achievement.achievedAt ? new Date(achievement.achievedAt).toLocaleDateString('id-ID', { year: 'numeric', month: 'short' }) : 'Tanggal tidak set'}</span>
-                                        {achievement.category && (
+                                        {(achievement as any).category && (
                                             <>
                                                 <span>•</span>
-                                                <span className="truncate">{achievement.category}</span>
+                                                <span className="truncate">{(achievement as any).category}</span>
                                             </>
                                         )}
                                     </div>
