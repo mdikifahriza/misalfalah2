@@ -1,8 +1,16 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Fraunces, Sora } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+const sora = Sora({
+    subsets: ['latin'],
+    variable: '--font-sora',
+});
+
+const fraunces = Fraunces({
+    subsets: ['latin'],
+    variable: '--font-fraunces',
+});
 
 export const metadata: Metadata = {
     title: 'MIS Al-Falah Kanigoro',
@@ -16,7 +24,7 @@ export default function RootLayout({
 }) {
     return (
         <html lang="id">
-            <body className={inter.className}>{children}</body>
+            <body className={`${sora.variable} ${fraunces.variable} font-sans`}>{children}</body>
         </html>
     );
 }
