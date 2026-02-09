@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
 
         // Validate required fields
         const requiredFields = [
-            'namaLengkap', 'nik', 'tempatLahir', 'tanggalLahir', 'jenisKelamin',
+            'namaLengkap', 'nik', 'nisn', 'tempatLahir', 'tanggalLahir', 'jenisKelamin',
             'alamat', 'namaAyah', 'pekerjaanAyah', 'namaIbu', 'pekerjaanIbu', 'noHp'
         ];
 
@@ -21,12 +21,29 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        const { data: activeWave, error: waveError } = await supabaseAdmin()
+            .from('ppdb_waves')
+            .select('id')
+            .eq('is_active', true)
+            .order('start_date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (waveError) throw waveError;
+        if (!activeWave?.id) {
+            return NextResponse.json(
+                { error: 'PPDB_CLOSED', message: 'PPDB sedang ditutup. Tidak ada gelombang aktif.' },
+                { status: 400 }
+            );
+        }
+
         const { data: registration, error } = await supabaseAdmin()
             .from('ppdb_registrations')
             .insert({
                 namaLengkap: data.namaLengkap,
                 nik: data.nik,
-                nisn: data.nisn || null,
+                nisn: data.nisn,
+                wave_id: activeWave.id,
                 tempatLahir: data.tempatLahir,
                 tanggalLahir: data.tanggalLahir,
                 jenisKelamin: data.jenisKelamin,
@@ -46,10 +63,29 @@ export async function POST(request: NextRequest) {
             throw error;
         }
 
+        const files = Array.isArray(data.files) ? data.files : [];
+        if (files.length && registration?.id) {
+            const normalized = files
+                .map((file: any) => ({
+                    registration_id: registration.id,
+                    file_type: file.fileType,
+                    file_url: file.fileUrl,
+                }))
+                .filter((file: any) => file.file_type && file.file_url);
+
+            if (normalized.length) {
+                const { error: fileError } = await supabaseAdmin()
+                    .from('ppdb_files')
+                    .insert(normalized);
+                if (fileError) throw fileError;
+            }
+        }
+
         return NextResponse.json({
             success: true,
             registrationId: registration.id,
-            message: 'Pendaftaran berhasil! Simpan ID pendaftaran Anda: ' + registration.id,
+            nisn: data.nisn,
+            message: 'Pendaftaran berhasil! Simpan NISN Anda sebagai nomor pendaftaran.',
         });
     } catch (error) {
         console.error('Error submitting PPDB registration:', error);

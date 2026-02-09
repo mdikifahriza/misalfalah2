@@ -1,74 +1,83 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
-type RouteContext = {
-    params: { id: string } | Promise<{ id: string }>;
-};
+// Tables to check for content post by ID
+const TABLES = ['news_posts', 'publications', 'achievements', 'galleries', 'downloads'];
 
-export async function GET(_: Request, context: RouteContext) {
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const params = await context.params;
-        const id = Number(params.id);
-        if (Number.isNaN(id)) {
-            return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
-        }
+        const { id } = await params;
 
-        const { data: post, error } = await supabaseAdmin()
-            .from('content_posts')
-            .select('*')
-            .eq('id', id)
-            .maybeSingle();
+        let post = null;
+        let foundTable = '';
 
-        if (error) {
-            throw error;
+        for (const tableName of TABLES) {
+            const { data, error } = await supabaseAdmin()
+                .from(tableName)
+                .select('*')
+                .eq('id', id)
+                .maybeSingle();
+
+            if (data) {
+                post = data;
+                foundTable = tableName;
+                break;
+            }
         }
 
         if (!post) {
             return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
         }
 
-        let media: any[] = [];
-        const { data: mediaData, error: mediaError } = await supabaseAdmin()
-            .from('content_media')
+        const entityType = foundTable === 'news_posts' ? 'news' :
+            foundTable === 'publications' ? 'publication' :
+                foundTable === 'achievements' ? 'achievement' :
+                    foundTable === 'galleries' ? 'gallery' : 'download';
+
+        const { data: media, error: mediaError } = await supabaseAdmin()
+            .from('media_items')
             .select('*')
-            .eq('postId', id)
-            .order('displayOrder', { ascending: true });
+            .eq('entity_id', id)
+            .eq('entity_type', entityType)
+            .order('display_order', { ascending: true });
 
-        if (mediaError) {
-            // 42P01 = undefined_table (handle gracefully so edit still works)
-            if (mediaError.code !== '42P01') {
-                throw mediaError;
-            }
-            console.warn('content_media table missing, returning empty media list.');
-        } else {
-            media = mediaData || [];
-        }
-
-        return NextResponse.json({ post, media });
+        return NextResponse.json({
+            post: { ...post, type: entityType },
+            media: media || []
+        });
     } catch (error) {
         console.error('Admin content post detail error:', error);
         return NextResponse.json({ error: 'Failed to fetch content post' }, { status: 500 });
     }
 }
 
-export async function DELETE(_: Request, context: RouteContext) {
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const params = await context.params;
-        const id = Number(params.id);
-        if (Number.isNaN(id)) {
-            return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+        const { id } = await params;
+
+        // Try deleting from each table until one succeeds (or just try all)
+        // Since we don't know the table, we search first or just try deleting
+
+        let deleted = false;
+        for (const tableName of TABLES) {
+            const { error, count } = await supabaseAdmin()
+                .from(tableName)
+                .delete({ count: 'exact' })
+                .eq('id', id);
+
+            if (!error && count && count > 0) {
+                deleted = true;
+                break;
+            }
         }
 
-        const { error } = await supabaseAdmin()
-            .from('content_posts')
+        // Also cleanup media items
+        await supabaseAdmin()
+            .from('media_items')
             .delete()
-            .eq('id', id);
+            .eq('entity_id', id);
 
-        if (error) {
-            throw error;
-        }
-
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: deleted });
     } catch (error) {
         console.error('Admin delete content post error:', error);
         return NextResponse.json({ error: 'Failed to delete content post' }, { status: 500 });

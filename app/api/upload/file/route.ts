@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
@@ -18,18 +20,34 @@ export async function POST(request: NextRequest) {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
+        const buffer = Buffer.from(await file.arrayBuffer());
+
+        // Ensure bucket exists (idempotent)
+        const { data: bucketInfo, error: bucketErr } = await supabaseAdmin().storage.getBucket(bucket);
+        if (bucketErr || !bucketInfo) {
+            const { error: createErr } = await supabaseAdmin().storage.createBucket(bucket, {
+                public: true,
+                fileSizeLimit: 50 * 1024 * 1024, // 50 MB
+            });
+            if (createErr) {
+                console.error('Create bucket error:', createErr);
+                return NextResponse.json({ error: 'Failed to create bucket' }, { status: 500 });
+            }
+        }
+
         // Upload to Supabase Storage
         const { data, error } = await supabaseAdmin().storage
             .from(bucket)
-            .upload(fileName, file, {
+            .upload(fileName, buffer, {
                 cacheControl: '3600',
                 upsert: false,
+                contentType: file.type || 'application/octet-stream',
             });
 
         if (error) {
             console.error('Supabase upload error:', error);
             return NextResponse.json(
-                { error: error.message },
+                { error: error.message || 'Upload error' },
                 { status: 500 }
             );
         }

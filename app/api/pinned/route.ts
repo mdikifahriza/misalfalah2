@@ -4,44 +4,62 @@ import type { PinnedItem } from '@/lib/types';
 
 export async function GET() {
     try {
-        // Fetch pinned content posts
-        const { data: posts, error: postsError } = await supabaseAdmin()
-            .from('content_posts')
-            .select('id, title, slug, coverUrl, publishedAt, createdAt')
-            .eq('isPublished', true)
+        // Fetch pinned news_posts
+        const { data: news, error: newsError } = await supabaseAdmin()
+            .from('news_posts')
+            .select('id, title, slug, published_at, created_at')
+            .eq('is_published', true)
             .eq('is_pinned', true);
 
-        if (postsError) throw postsError;
+        if (newsError) throw newsError;
+
+        // Fetch pinned publications
+        const { data: pubs, error: pubsError } = await supabaseAdmin()
+            .from('publications')
+            .select('id, title, slug, type, published_at, created_at')
+            .eq('is_published', true)
+            .eq('is_pinned', true);
+
+        if (pubsError) throw pubsError;
 
         // Fetch pinned achievements
         const { data: achievements, error: achError } = await supabaseAdmin()
             .from('achievements')
-            .select('id, title, slug, coverUrl, achievedAt, createdAt')
-            .eq('isPublished', true)
+            .select('id, title, slug, achieved_at, created_at')
+            .eq('is_published', true)
             .eq('is_pinned', true);
 
         if (achError) throw achError;
 
         // Map and merge
-        const pinnedPosts: PinnedItem[] = (posts || []).map(p => ({
+        const pinnedNews: PinnedItem[] = (news || []).map(p => ({
             id: p.id,
             title: p.title,
             slug: p.slug,
-            coverUrl: p.coverUrl,
-            type: 'publikasi',
-            date: p.publishedAt || p.createdAt
+            coverUrl: null, // We'd need to join media_items for cover, or just leave null for now
+            type: 'news',
+            date: p.published_at || p.created_at
+        }));
+
+        const pinnedPubs: PinnedItem[] = (pubs || []).map(p => ({
+            id: p.id,
+            title: p.title,
+            slug: p.slug,
+            coverUrl: null,
+            type: p.type || 'publication',
+            date: p.published_at || p.created_at
         }));
 
         const pinnedAchievements: PinnedItem[] = (achievements || []).map(a => ({
             id: a.id,
             title: a.title,
             slug: a.slug,
-            coverUrl: a.coverUrl,
-            type: 'prestasi',
-            date: a.achievedAt || a.createdAt
+            coverUrl: null,
+            type: 'achievement',
+            date: a.achieved_at || a.created_at
         }));
 
-        const merged = [...pinnedPosts, ...pinnedAchievements].sort((a, b) =>
+        const merged = [...pinnedNews, ...pinnedPubs, ...pinnedAchievements].sort((a, b) =>
             new Date(b.date).getTime() - new Date(a.date).getTime()
         );
 

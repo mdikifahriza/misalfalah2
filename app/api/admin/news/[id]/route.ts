@@ -8,16 +8,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const updatePayload = {
             title: payload.title?.trim() || '',
             slug: payload.slug?.trim() || '',
-            date: payload.date || new Date().toISOString(),
             excerpt: payload.excerpt?.trim() || '',
             content: payload.content || null,
-            thumbnailUrl: payload.thumbnailUrl || null,
-            category: payload.category?.trim() || 'Umum',
-            isPublished: payload.isPublished ?? true,
+            author_name: payload.authorName || 'Admin',
+            published_at: payload.publishedAt || new Date().toISOString(),
+            is_published: payload.isPublished ?? true,
+            is_pinned: payload.isPinned ?? false,
         };
 
         const { data, error } = await supabaseAdmin()
-            .from('news')
+            .from('news_posts')
             .update(updatePayload)
             .eq('id', id)
             .select('*')
@@ -27,7 +27,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             throw error;
         }
 
-        return NextResponse.json(data);
+        return NextResponse.json({
+            ...data,
+            isPinned: data.is_pinned
+        });
     } catch (error) {
         console.error('Admin news update error:', error);
         return NextResponse.json({ error: 'Failed to update news' }, { status: 500 });
@@ -38,7 +41,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     try {
         const { id } = await params;
         const { error } = await supabaseAdmin()
-            .from('news')
+            .from('news_posts')
             .delete()
             .eq('id', id);
 

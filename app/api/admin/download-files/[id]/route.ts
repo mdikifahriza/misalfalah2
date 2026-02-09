@@ -6,13 +6,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const { id } = await params;
         const payload = await request.json();
         const updatePayload = {
-            title: payload.title?.trim() || '',
-            category: payload.category?.trim() || 'Umum',
-            date: payload.date || new Date().toISOString(),
-            size: payload.size?.trim() || '',
-            fileType: payload.fileType || 'PDF',
-            fileUrl: payload.fileUrl || '',
-            isActive: payload.isActive ?? true,
+            download_id: payload.downloadId,
+            file_name: payload.fileName,
+            file_type: payload.fileType,
+            file_size_kb: payload.fileSizeKb,
+            storage_path: payload.storagePath || null,
+            public_url: payload.publicUrl,
+            display_order: payload.displayOrder ?? 0,
         };
 
         const { data, error } = await supabaseAdmin()

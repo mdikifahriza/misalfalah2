@@ -6,7 +6,7 @@ export async function GET() {
         const { data, error } = await supabaseAdmin()
             .from('download_files')
             .select('*')
-            .order('date', { ascending: false });
+            .order('display_order', { ascending: true });
 
         if (error) {
             throw error;
@@ -23,17 +23,17 @@ export async function POST(request: NextRequest) {
     try {
         const payload = await request.json();
         const insertPayload = {
-            title: payload.title?.trim() || '',
-            category: payload.category?.trim() || 'Umum',
-            date: payload.date || new Date().toISOString(),
-            size: payload.size?.trim() || '',
-            fileType: payload.fileType || 'PDF',
-            fileUrl: payload.fileUrl || '',
-            isActive: payload.isActive ?? true,
+            download_id: payload.downloadId,
+            file_name: payload.fileName,
+            file_type: payload.fileType,
+            file_size_kb: payload.fileSizeKb,
+            storage_path: payload.storagePath || null,
+            public_url: payload.publicUrl,
+            display_order: payload.displayOrder ?? 0,
         };
 
-        if (!insertPayload.title || !insertPayload.fileUrl) {
-            return NextResponse.json({ error: 'Judul dan file wajib diisi.' }, { status: 400 });
+        if (!insertPayload.download_id || !insertPayload.public_url || !insertPayload.file_name) {
+            return NextResponse.json({ error: 'downloadId, fileName, dan publicUrl wajib diisi.' }, { status: 400 });
         }
 
         const { data, error } = await supabaseAdmin()

@@ -26,8 +26,8 @@ export async function GET() {
             .from('achievements')
             .select('*')
             .order('is_pinned', { ascending: false })
-            .order('achievedAt', { ascending: false })
-            .order('createdAt', { ascending: false });
+            .order('achieved_at', { ascending: false })
+            .order('created_at', { ascending: false });
 
         if (error) throw error;
         const mapped = (data || []).map((row) => ({
@@ -52,15 +52,13 @@ export async function POST(request: Request) {
         const insertPayload = {
             title: postInput.title?.trim(),
             slug: postInput.slug?.trim(),
-            excerpt: postInput.excerpt?.trim() || null,
-            contentHtml: postInput.contentHtml || null,
-            contentText: postInput.contentText || null,
-            coverUrl: postInput.coverUrl || null,
-            category: postInput.category || null,
-            achievedAt: postInput.achievedAt || null,
-            isPublished: postInput.isPublished ?? true,
+            description: postInput.description || null,
+            event_name: postInput.eventName || null,
+            event_level: postInput.eventLevel || null,
+            rank: postInput.rank || null,
+            achieved_at: postInput.achievedAt || null,
+            is_published: postInput.isPublished ?? true,
             is_pinned: postInput.isPinned ?? false,
-            meta: parseMeta(postInput.meta),
         };
 
         const { data, error } = await supabaseAdmin()
@@ -88,15 +86,13 @@ export async function PUT(request: Request) {
         const updatePayload = {
             title: postInput.title?.trim(),
             slug: postInput.slug?.trim(),
-            excerpt: postInput.excerpt?.trim() || null,
-            contentHtml: postInput.contentHtml || null,
-            contentText: postInput.contentText || null,
-            coverUrl: postInput.coverUrl || null,
-            category: postInput.category || null,
-            achievedAt: postInput.achievedAt || null,
-            isPublished: postInput.isPublished ?? true,
+            description: postInput.description || null,
+            event_name: postInput.eventName || null,
+            event_level: postInput.eventLevel || null,
+            rank: postInput.rank || null,
+            achieved_at: postInput.achievedAt || null,
+            is_published: postInput.isPublished ?? true,
             is_pinned: postInput.isPinned ?? false,
-            meta: parseMeta(postInput.meta),
         };
 
         const { data, error } = await supabaseAdmin()

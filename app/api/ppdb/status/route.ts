@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
-// Check PPDB status by registration ID
+// Check PPDB status by NISN
 export async function POST(request: NextRequest) {
     try {
-        const { registrationId } = await request.json();
+        const { nisn } = await request.json();
 
-        if (!registrationId) {
+        if (!nisn) {
             return NextResponse.json(
-                { error: 'Registration ID is required' },
+                { error: 'NISN is required' },
                 { status: 400 }
             );
         }
 
         const { data: registration, error } = await supabaseAdmin()
             .from('ppdb_registrations')
-            .select('id, namaLengkap, tanggalDaftar, status, pesan')
-            .eq('id', registrationId)
+            .select('id, namaLengkap, tanggalDaftar, status, pesan, nisn')
+            .eq('nisn', nisn)
             .maybeSingle();
 
         if (error) {
@@ -25,13 +25,13 @@ export async function POST(request: NextRequest) {
 
         if (!registration) {
             return NextResponse.json(
-                { error: 'NOT_FOUND', message: 'ID pendaftaran tidak ditemukan' },
+                { error: 'NOT_FOUND', message: 'NISN tidak ditemukan' },
                 { status: 404 }
             );
         }
 
         return NextResponse.json({
-            id: registration.id,
+            id: registration.nisn,
             nama: registration.namaLengkap,
             tanggalDaftar: new Date(registration.tanggalDaftar).toISOString().split('T')[0],
             status: registration.status,
