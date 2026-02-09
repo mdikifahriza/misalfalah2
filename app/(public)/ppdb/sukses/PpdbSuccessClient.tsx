@@ -69,10 +69,16 @@ const PpdbSuccessClient: React.FC = () => {
             }
 
             const registration = await navigator.serviceWorker.register('/sw.js');
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(vapidKey),
-            });
+            const readyRegistration = await navigator.serviceWorker.ready;
+            const activeRegistration = readyRegistration.active ? readyRegistration : registration;
+
+            let subscription = await activeRegistration.pushManager.getSubscription();
+            if (!subscription) {
+                subscription = await activeRegistration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidKey),
+                });
+            }
 
             const json = subscription.toJSON();
             const payload: PushSubscriptionPayload = {
